@@ -1,6 +1,6 @@
 # Provable AI
 
-[![License](https://img.shields.io/badge/license-Zerivox%20Source--Available-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-Zorynex%20Source--Available-blue)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
 
@@ -166,7 +166,7 @@ VALID: Proof verified successfully
 
 # License
 
-This repository is released under the **Zerivox Source-Available License**.
+This repository is released under the **Zorynex Source-Available License**.
 
 You are permitted to **view, download, and evaluate** the software for **non-commercial purposes only**.
 
@@ -184,6 +184,6 @@ The following uses require a **commercial license**:
 
 For commercial licensing, enterprise deployment, or partnerships contact:
 
-**zerivoxfounder@gmail.com**
+**zorynexfounder@gmail.com**
 
 See the `LICENSE` file for full terms.
