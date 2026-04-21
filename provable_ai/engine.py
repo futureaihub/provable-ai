@@ -1,8 +1,7 @@
 import json
 import hashlib
-from datetime import datetime
-
-from .storage import SQLiteStorage
+from datetime import datetime, timezone
+from .storage import get_storage
 from .signer import Signer
 
 
@@ -10,8 +9,8 @@ class Engine:
 
     SCHEMA_VERSION = "1.0"
 
-    def __init__(self, db_path="provable_ai.db"):
-        self.storage = SQLiteStorage(db_path)
+    def __init__(self, db_path="zorynex.db"):
+        self.storage = get_storage(db_path)
         self.signer = Signer()
 
     # ============================================================
@@ -37,9 +36,7 @@ class Engine:
     def _merkle_root(self, hashes):
         if not hashes:
             return None
-
         layer = hashes[:]
-
         while len(layer) > 1:
             next_layer = []
             for i in range(0, len(layer), 2):
@@ -47,7 +44,6 @@ class Engine:
                 right = layer[i + 1] if i + 1 < len(layer) else left
                 next_layer.append(self._hash(left + right))
             layer = next_layer
-
         return layer[0]
 
     # ============================================================
@@ -55,12 +51,9 @@ class Engine:
     # ============================================================
 
     def compile(self, spec: dict):
-
         protocol_hash = self._hash(self._canonical(spec))
-
         if not self.storage.get_protocol_by_hash(protocol_hash):
             self.storage.register_protocol(protocol_hash, spec)
-
         return {
             "protocol_hash": protocol_hash,
             "proof_hash": protocol_hash,
@@ -73,20 +66,16 @@ class Engine:
     # ============================================================
 
     def create_instance(self, instance_id: str):
-
         protocol = self.storage.get_latest_protocol()
         if not protocol:
             raise Exception("No protocol compiled")
-
         if self.storage.get_instance(instance_id):
             raise Exception("Instance already exists")
-
         self.storage.create_instance(
             instance_id,
             protocol["protocol_hash"],
             protocol["initial_state"]
         )
-
         return {
             "instance_id": instance_id,
             "state": protocol["initial_state"]
@@ -108,7 +97,6 @@ class Engine:
         policy_version: str,
         metadata_json: str
     ):
-
         required = [
             input_hash,
             output_hash,
@@ -117,24 +105,20 @@ class Engine:
             policy_version,
             metadata_json
         ]
-
         if any(v is None or v == "" for v in required):
             raise Exception("AI Execution Envelope incomplete")
 
-        # Governance
+        # Governance gate
         if not self.storage.is_model_approved(model_version):
             raise Exception("Model version not approved")
-
         if not self.storage.is_agent_approved(agent_version):
             raise Exception("Agent version not approved")
-
         if not self.storage.is_policy_active(policy_version):
             raise Exception("Policy version not active")
 
         instance = self.storage.get_instance(instance_id)
         if not instance:
             raise Exception("Instance not found")
-
         if instance["frozen"] == 1:
             raise Exception("Instance is frozen.")
 
@@ -152,8 +136,7 @@ class Engine:
 
         ledger = self.storage.get_ledger(instance_id)
         previous_hash = ledger[-1]["current_hash"] if ledger else None
-
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
 
         payload = {
             "previous_hash": previous_hash,
@@ -199,7 +182,6 @@ class Engine:
     # ============================================================
 
     def replay(self, instance_id: str):
-
         instance = self.storage.get_instance(instance_id)
         if not instance:
             raise Exception("Instance not found")
@@ -208,16 +190,13 @@ class Engine:
         spec = self._verify_protocol_integrity(protocol_row)
 
         ledger = self.storage.get_ledger(instance_id)
-
         state = spec["initial_state"]
         previous_hash = None
         expected_version = 1
 
         for entry in ledger:
-
             if entry["schema_version"] != self.SCHEMA_VERSION:
                 return {"valid": False, "reason": "schema mismatch"}
-
             if entry["version"] != expected_version:
                 return {"valid": False, "reason": "version mismatch"}
 
@@ -240,7 +219,6 @@ class Engine:
             }
 
             rebuilt_hash = self._hash(self._canonical(payload))
-
             if rebuilt_hash != entry["current_hash"]:
                 return {"valid": False, "reason": "hash mismatch"}
 
@@ -258,14 +236,11 @@ class Engine:
     # ============================================================
 
     def _compute_instance_root(self, instance_id: str):
-
         ledger = self.storage.get_ledger(instance_id)
         if not ledger:
             return None
-
         hashes = [e["current_hash"] for e in ledger]
         hashes.sort()
-
         return self._merkle_root(hashes)
 
     # ============================================================
@@ -273,30 +248,40 @@ class Engine:
     # ============================================================
 
     def compute_system_root(self):
-
         roots = []
-
         for inst in self.storage.list_instances():
             r = self._compute_instance_root(inst["instance_id"])
             if r:
                 roots.append(r)
-
         if not roots:
             return None
-
         roots.sort()
-
         return self._merkle_root(roots)
 
     # ============================================================
-    # DRIFT COMPARE
+    # DRIFT COMPARE — SYSTEM LEVEL
     # ============================================================
 
     def compare_system_root(self, external_root: str):
-
         current = self.compute_system_root()
-
         return {
+            "match": current == external_root,
+            "current_root": current,
+            "external_root": external_root
+        }
+
+    # ============================================================
+    # DRIFT COMPARE — INSTANCE LEVEL
+    # FIX: was missing — server was calling this and returning 500
+    # ============================================================
+
+    def compare_instance_root(self, instance_id: str, external_root: str):
+        instance = self.storage.get_instance(instance_id)
+        if not instance:
+            raise Exception("Instance not found")
+        current = self._compute_instance_root(instance_id)
+        return {
+            "instance_id": instance_id,
             "match": current == external_root,
             "current_root": current,
             "external_root": external_root
@@ -307,7 +292,6 @@ class Engine:
     # ============================================================
 
     def export_proof(self, instance_id: str):
-
         replay = self.replay(instance_id)
         if not replay["valid"]:
             return replay
@@ -327,7 +311,6 @@ class Engine:
         }
 
         signature = self.signer.sign(proof)
-
         self.storage.freeze_instance(instance_id)
 
         return {
@@ -343,14 +326,13 @@ class Engine:
     # ============================================================
 
     def export_blockchain_anchor(self):
-
         system_root = self.compute_system_root()
         if not system_root:
             return {"valid": False, "reason": "No instances"}
 
         anchor_payload = {
             "version": "1.0",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "system_root": system_root
         }
 
