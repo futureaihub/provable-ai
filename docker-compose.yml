@@ -1,0 +1,58 @@
+version: "3.9"
+
+# ============================================================
+# PILOT MODE (SQLite — default)
+# Usage: docker compose up
+# ============================================================
+
+services:
+
+  zorynex:
+    build: .
+    image: zorynex/provable-ai:latest
+    container_name: zorynex
+    ports:
+      - "8000:8000"
+    volumes:
+      # SQLite database and signing key persist across restarts
+      - zorynex_data:/data
+    environment:
+      # --- REQUIRED for production ---
+      # Generate key: python -c "from nacl.signing import SigningKey; from nacl.encoding import HexEncoder; print(SigningKey.generate().encode(encoder=HexEncoder).decode())"
+      ZORYNEX_SIGNING_KEY: ${ZORYNEX_SIGNING_KEY:-}
+
+      # --- API Authentication ---
+      # Set comma-separated keys: key1,key2,key3
+      ZORYNEX_API_KEYS: ${ZORYNEX_API_KEYS:-}
+
+      # --- Local dev only: disable auth ---
+      ZORYNEX_DISABLE_AUTH: ${ZORYNEX_DISABLE_AUTH:-false}
+
+      # --- Database ---
+      # Leave unset for SQLite (pilot). Set for PostgreSQL (production).
+      ZORYNEX_DATABASE_URL: ${ZORYNEX_DATABASE_URL:-}
+      ZORYNEX_DB_PATH: /data/zorynex.db
+
+      # --- CORS ---
+      ZORYNEX_ALLOWED_ORIGINS: ${ZORYNEX_ALLOWED_ORIGINS:-http://localhost:5173}
+
+      # --- Rate limiting ---
+      ZORYNEX_RATE_LIMIT: ${ZORYNEX_RATE_LIMIT:-60}
+
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  zorynex_data:
+    driver: local
+
+# ============================================================
+# PRODUCTION MODE (PostgreSQL)
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up
+# See: docker-compose.prod.yml
+# ============================================================

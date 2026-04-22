@@ -1,0 +1,46 @@
+version: "3.9"
+
+# ============================================================
+# PRODUCTION OVERRIDE — PostgreSQL backend
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Required env vars (set in .env or your secrets manager):
+#   ZORYNEX_SIGNING_KEY    — Ed25519 private key hex
+#   ZORYNEX_API_KEYS       — comma-separated API keys
+#   ZORYNEX_DB_PASSWORD    — PostgreSQL password
+#   ZORYNEX_ALLOWED_ORIGINS— your production domain(s)
+# ============================================================
+
+services:
+
+  zorynex:
+    environment:
+      ZORYNEX_DATABASE_URL: postgresql://zorynex:${ZORYNEX_DB_PASSWORD}@postgres:5432/zorynex
+      ZORYNEX_DISABLE_AUTH: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: zorynex_postgres
+    environment:
+      POSTGRES_DB: zorynex
+      POSTGRES_USER: zorynex
+      POSTGRES_PASSWORD: ${ZORYNEX_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zorynex -d zorynex"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # Do not expose Postgres port externally in production
+    expose:
+      - "5432"
+
+volumes:
+  postgres_data:
+    driver: local

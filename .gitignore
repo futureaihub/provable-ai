@@ -73,3 +73,4 @@ node_modules/
 dist/
 build/
 provable_key.hex
+zorynex_signing.key
