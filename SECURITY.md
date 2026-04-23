@@ -1,110 +1,185 @@
 # Security Policy
 
+## Overview
+
+Provable AI is security-sensitive infrastructure. The system produces
+cryptographic proof artifacts used by regulators and auditors to verify
+AI decisions in financial services. We take security reports seriously
+and respond promptly.
+
+---
+
 ## Supported Versions
 
 | Version | Supported |
 |---------|-----------|
-| main (v1.0) | ✅ Active |
+| main branch | ✅ Active |
+| Tagged releases | ✅ Active |
+| Forks / derivatives | ❌ Not supported |
+
+---
+
+## Cryptographic Components
+
+The following cryptographic primitives are used in this system:
+
+### SHA-256 Hash Chains (hashlib)
+- Used in: `provable_ai/signer.py`, `provable_ai/storage.py`
+- Purpose: Tamper-evident hash chain linking each decision record
+- Every ledger entry includes `prev_hash` (SHA-256 of previous record)
+- Altering any record breaks the chain — detectable via replay
+
+### Ed25519 Digital Signatures (PyNaCl / libsodium)
+- Used in: `provable_ai/signer.py`
+- Purpose: Cryptographic signing of every proof artifact
+- Key generation: `SigningKey.generate()` on first run
+- Key storage: `provable_key.hex` — private key file
+- Public key: Shareable for external verification
+
+### Merkle Roots
+- Used in: `provable_ai/engine.py`, `tools/verify_core.py`
+- Purpose: Replay-verifiable state for tamper detection
+- Enables reconstruction of any execution history
+
+### Verification Chain
+- `tools/verify_core.py` — 224-line core verification module
+- `tools/verify_proof.py` — Proof artifact parser and validator
+- `tools/offline_verify.py` — Standalone offline verifier
+- `cli.py` — Root CLI entry point
+
+---
+
+## Private Key Security
+
+**The file `provable_key.hex` contains your Ed25519 private signing key.**
+
+Critical requirements:
+- **Never commit `provable_key.hex` to version control**
+- The `.gitignore` file excludes this file by default — do not remove this entry
+- In production, manage the key path via the `SIGNING_KEY_PATH` environment variable
+- Rotate the signing key if it is ever exposed
+- Back up the key securely — losing it means previously signed proofs cannot be re-signed
+
+In production Docker deployments, inject the key via Docker secrets or
+AWS Secrets Manager rather than the filesystem.
+
+---
+
+## Production Security
+
+The production FastAPI server (`server/main.py`) includes:
+
+- **Authentication middleware** — API key or token-based auth
+- **Rate limiting** — prevents abuse of the decision recording endpoint
+- **Audit logging** — all API calls logged for internal review
+- **Input validation** — request schema validation on all endpoints
+
+**Environment variables for production:**
+
+```bash
+SECRET_KEY=your-secret-key          # API authentication
+SIGNING_KEY_PATH=provable_key.hex   # Ed25519 key location
+LEDGER_DB_PATH=ledger.db            # SQLite ledger path
+LOG_LEVEL=INFO                      # Logging verbosity
+```
+
+**Docker production deployment:**
+
+```bash
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+The production compose file enforces:
+- Non-root container user
+- Read-only filesystem where possible
+- Health check on `/health` endpoint
+- No exposed debug endpoints
 
 ---
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Provable AI, **please report it privately**.
+**Do not report security vulnerabilities in public GitHub issues.**
 
-**Do not open a public GitHub issue.** Public disclosure before a fix is available puts users at risk.
+Report vulnerabilities privately to:
 
-### How to report
+**Email:** hanif@zorynex.co  
+**Subject:** `[SECURITY] Brief description`
 
-Email: **hanif@zorynex.co**
+### What to include
 
-Include as much of the following as possible:
+- Description of the vulnerability
+- Steps to reproduce
+- Which component is affected (engine.py, signer.py, verify_core.py, etc.)
+- Potential impact — specifically whether proof artifact integrity could be compromised
+- Your name / handle for attribution (optional)
 
-- Description of the vulnerability and its potential impact
-- Steps to reproduce or a proof-of-concept
-- Affected component (`provable_ai/`, `server/`, `tools/`, `cli.py`, or other)
-- Suggested fix or mitigation if you have one
+### What happens next
 
-We will acknowledge your report within **48 hours** and aim to resolve confirmed vulnerabilities within **14 days**, depending on severity.
+| Timeline | Action |
+|----------|--------|
+| Within 48 hours | Acknowledgement of report |
+| Within 7 days | Initial assessment and severity rating |
+| Within 30 days | Fix developed and tested |
+| Within 45 days | Fix released and reporter notified |
 
----
-
-## Security Model
-
-Provable AI is designed to protect the **integrity and verifiability** of AI decisions. The system's core security guarantees are:
-
-### Cryptographic Integrity
-
-- **SHA-256 hash chains** — every ledger entry links `prev_hash → curr_hash`, forming a tamper-evident chain. Altering any entry breaks every subsequent hash.
-- **Ed25519 signatures (PyNaCl)** — every decision record is cryptographically signed at write time. Signatures are verified independently against the embedded public key.
-- **Merkle roots** — computed across all `curr_hashes` in an instance, enabling replay-based tamper detection without server access.
-
-### Governance Enforcement
-
-- Model, agent, and policy versions are validated against approved registries **before** any proof is written.
-- Unauthorized versions raise an Exception and are blocked — not merely logged.
-- Protocol integrity is re-verified on every state transition; a tampered protocol spec will be detected.
-
-### Proof Immutability
-
-- Instances are **frozen** after export. Once a proof artifact is generated, the underlying instance cannot be modified.
-- Proof packages include the `public_key` — auditors can verify independently with no server access, no registration, and no trust in any internal system.
-
-### Independent Verification
-
-- The verification CLI (`cli.py` / `tools/offline_verify.py`) is source-available and runs fully offline.
-- Verification rebuilds every SHA-256 hash from raw payload data and re-verifies Ed25519 signatures. If any step fails, tamper is detected.
-
-### What Provable AI does NOT claim
-
-- Provable AI does not protect the **confidentiality** of decision inputs or outputs — it protects **integrity and verifiability**.
-- Provable AI does not replace secure deployment practices (secrets management, access control, network hardening).
-- Key management security depends on the operator's environment configuration.
+We will credit security researchers in release notes unless anonymity is requested.
 
 ---
 
-## Scope
+## Threat Model
 
-The following are **in scope** for security reports:
+**In scope — we want to know about:**
 
-- Cryptographic bypass or weaknesses in hash chain / signature verification
-- Governance gate bypass — unauthorized model/agent/policy versions executing without exception
-- Proof export producing invalid or misleadingly passing verification
-- Instance mutation after freeze
-- Replay verification producing false-positive VALID results
-- Server authentication or rate-limiting bypass (`server/main.py`)
-- Injection vulnerabilities in API endpoints
+- Vulnerabilities that allow forging or altering proof artifacts without detection
+- Weaknesses in the SHA-256 hash chain implementation that allow chain manipulation
+- Ed25519 signing vulnerabilities that allow signature forgery
+- Merkle root manipulation that defeats replay-based tamper detection
+- Authentication bypass in the FastAPI server
+- Private key exposure through the API or filesystem
+- Replay attacks on the verification CLI
+- SQLite ledger manipulation that bypasses tamper detection
 
-The following are **out of scope**:
+**Out of scope:**
 
-- Vulnerabilities in third-party dependencies (report directly to those maintainers)
+- Vulnerabilities in upstream dependencies (PyNaCl, FastAPI, SQLite) — report directly to those projects
 - Social engineering attacks
-- Issues requiring physical access to the host machine
-- Theoretical attacks with no practical exploitation path
+- Physical access attacks
+- Denial of service without cryptographic impact
+- Missing security headers on non-production deployments
 
 ---
 
-## Responsible Disclosure
+## Dependency Security
 
-We follow coordinated disclosure. We ask researchers to:
+Key dependencies and their security posture:
 
-1. Report privately before any public disclosure
-2. Allow reasonable time to investigate and ship a fix (target: 14 days for critical, 30 days for moderate)
-3. Not exploit the vulnerability beyond what is necessary to demonstrate it
+| Package | Purpose | Security Notes |
+|---------|---------|----------------|
+| PyNaCl | Ed25519 signatures | Wrapper around libsodium — audited cryptography library |
+| FastAPI | API server | Actively maintained — update regularly |
+| SQLite | Ledger storage | Append-only access pattern — no remote connections |
+| hashlib | SHA-256 chains | Python standard library — no external dependency |
 
-We commit to:
+Run `pip audit` against `requirements.txt` to check for known vulnerabilities in dependencies.
 
-1. Acknowledging reports within 48 hours
-2. Keeping reporters informed of investigation progress
-3. Crediting researchers in release notes (if desired)
-4. Not pursuing legal action against good-faith security researchers
+---
 
-We appreciate responsible disclosure and security research that helps strengthen the system.
+## Verification Security
+
+The independent verification tools are designed to operate without trusting the originating system:
+
+- `offline_verify.py` has no network calls — fully airgapped
+- `verify_core.py` implements verification from first principles — no shortcuts
+- Proof artifacts are self-contained — no external lookups required
+- The public key for signature verification can be distributed separately from the proof
+
+This means a regulator or auditor can verify proof artifacts without any access to your infrastructure, reducing the attack surface for evidence manipulation.
 
 ---
 
 ## Contact
 
-**Security reports:** hanif@zorynex.co  
-**General enquiries:** zorynexfounder@gmail.com  
-**Repository:** https://github.com/futureaihub/provable-ai
+**Hanif Shaik** — Founder, Zorynex  
+[hanif@zorynex.co](mailto:hanif@zorynex.co)  
+[zorynex.co](https://zorynex.co)
