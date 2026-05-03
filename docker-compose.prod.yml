@@ -1,46 +1,152 @@
-version: "3.9"
-
-# ============================================================
-# PRODUCTION OVERRIDE — PostgreSQL backend
-# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Zorynex -- Production docker-compose
+# Architecture: nginx --> pgBouncer --> PostgreSQL + zorynex app
 #
-# Required env vars (set in .env or your secrets manager):
-#   ZORYNEX_SIGNING_KEY    — Ed25519 private key hex
-#   ZORYNEX_API_KEYS       — comma-separated API keys
-#   ZORYNEX_DB_PASSWORD    — PostgreSQL password
-#   ZORYNEX_ALLOWED_ORIGINS— your production domain(s)
-# ============================================================
+# Usage:
+#   docker secret create zorynex_api_keys -
+#   docker secret create zorynex_webhook_secret -
+#   docker secret create zorynex_signing_key -
+#   docker secret create postgres_password -
+#   docker-compose -f docker-compose.prod.yml up -d
+
+version: "3.8"
 
 services:
 
-  zorynex:
-    environment:
-      ZORYNEX_DATABASE_URL: postgresql://zorynex:${ZORYNEX_DB_PASSWORD}@postgres:5432/zorynex
-      ZORYNEX_DISABLE_AUTH: "false"
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/zorynex.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - nginx_logs:/var/log/nginx
     depends_on:
-      postgres:
+      zorynex:
         condition: service_healthy
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
 
   postgres:
     image: postgres:16-alpine
-    container_name: zorynex_postgres
     environment:
-      POSTGRES_DB: zorynex
-      POSTGRES_USER: zorynex
-      POSTGRES_PASSWORD: ${ZORYNEX_DB_PASSWORD}
+      POSTGRES_DB:            zorynex
+      POSTGRES_USER:          zorynex
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
+      - pg_data:/var/lib/postgresql/data
+    # Not exposed to host -- only pgBouncer connects
+    expose:
+      - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U zorynex -d zorynex"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
-    # Do not expose Postgres port externally in production
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  pgbouncer:
+    image: pgbouncer/pgbouncer:1.23.1
+    environment:
+      DATABASES_HOST:     postgres
+      DATABASES_PORT:     "5432"
+      DATABASES_DBNAME:   zorynex
+      DATABASES_USER:     zorynex
+      PGBOUNCER_POOL_MODE:      transaction
+      PGBOUNCER_MAX_CLIENT_CONN: "100"
+      PGBOUNCER_DEFAULT_POOL_SIZE: "20"
+      PGBOUNCER_MIN_POOL_SIZE:   "5"
     expose:
       - "5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+
+  zorynex:
+    image: zorynex:latest
+    expose:
+      - "8000"
+    volumes:
+      - zorynex_data:/data
+    secrets:
+      - zorynex_api_keys
+      - zorynex_webhook_secret
+      - zorynex_signing_key
+    environment:
+      ZORYNEX_BACKEND:              postgres
+      # pgBouncer connection string (transaction pooling = multi-worker safe)
+      DATABASE_URL:                 postgres://zorynex@pgbouncer:5432/zorynex
+      ZORYNEX_WORKERS:              "4"
+      ZORYNEX_API_KEYS_FILE:        /run/secrets/zorynex_api_keys
+      ZORYNEX_WEBHOOK_SECRET_FILE:  /run/secrets/zorynex_webhook_secret
+      ZORYNEX_SIGNING_KEY_FILE:     /run/secrets/zorynex_signing_key
+      ZORYNEX_AUDIT_DB_PATH:        /data/zorynex_audit.db
+      ZORYNEX_ANCHOR_DB_PATH:       /data/zorynex_anchors.db
+      ZORYNEX_KEYREGISTRY_DB_PATH:  /data/zorynex_keyregistry.db
+      ZORYNEX_DRIFT_DB_PATH:        /data/zorynex_drift.db
+      ZORYNEX_ANCHOR_RFC3161:       "true"
+      ZORYNEX_TSA_URL:              "https://freetsa.org/tsr"
+      ZORYNEX_REQUIRE_TENANT:       "true"
+      ZORYNEX_CORS_ORIGINS:         "https://yourdomain.example.com"
+      ZORYNEX_POOL_MIN:             "2"
+      ZORYNEX_POOL_MAX:             "20"
+    # PostgreSQL + pgBouncer = safe with 4 workers
+    command: >
+      python3 -m uvicorn server.main:app
+      --host 0.0.0.0
+      --port 8000
+      --workers 4
+      --no-access-log
+    depends_on:
+      - pgbouncer
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "10"
 
 volumes:
-  postgres_data:
+  pg_data:
     driver: local
+  zorynex_data:
+    driver: local
+  nginx_logs:
+    driver: local
+
+secrets:
+  zorynex_api_keys:
+    external: true
+  zorynex_webhook_secret:
+    external: true
+  zorynex_signing_key:
+    external: true
+  postgres_password:
+    external: true

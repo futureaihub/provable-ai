@@ -1,0 +1,19 @@
+{
+  "name": "zorynex-verifier",
+  "version": "1.0.0",
+  "description": "Zorynex proof verifier — browser and Node.js",
+  "type": "module",
+  "main": "dist/verifier.js",
+  "types": "dist/verifier.d.ts",
+  "scripts": {
+    "build": "tsc && npx esbuild verifier.ts --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/verifier.bundle.js",
+    "test": "node test_verifier.mjs"
+  },
+  "dependencies": {
+    "@noble/ed25519": "^2.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "typescript": "^5.9.3"
+  }
+}

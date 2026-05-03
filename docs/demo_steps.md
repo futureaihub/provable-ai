@@ -1,340 +1,253 @@
-# Zorynex — Loan Decision Verification Demo
+# Zorynex — Live Demo Guide
 
-This demo shows how Zorynex converts AI-driven decisions into
-cryptographically verifiable audit records that can be independently
-verified offline — without server access and without trusting internal logs.
+**Who watches this:** Developers, compliance leads, investors, CROs, regulators.
 
-**Scenario:** A fintech uses an AI model to approve loans.
-Regulators and auditors must be able to verify which model made the decision,
-what decision path was executed, whether the process was tampered with,
-and whether execution followed the approved policy.
+**What they'll leave knowing:** AI decisions at your company are not just logged — they are cryptographically locked at the moment they happen, and any auditor can verify them forever, independently, with zero access to your systems.
+
+**Total time:** 10 minutes start to finish.
 
 ---
 
-## Before You Start
-
-Start the API server:
+## Before the demo — one command
 
 ```bash
-uvicorn server.main:app --reload
+python bootstrap.py --start
 ```
 
-Check it is running:
+Server starts. Open **http://127.0.0.1:8000/docs** → click **Authorize** → `X-API-Key: dev-key`.
+
+---
+
+## Step 1 — Seed the environment (10 seconds)
+
+Run `POST /demo/bootstrap` in Swagger, or:
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl -X POST http://127.0.0.1:8000/demo/bootstrap \
+  -H "X-API-Key: dev-key"
 ```
 
-Expected:
+This approves a model, agent, and policy, compiles a loan workflow, and creates a demo instance — all in one call. No manual setup.
 
+**What to say:**
+*"In production, your team defines which model versions, agent versions, and policy versions are authorised to write decisions. Nothing outside that list can touch the ledger."*
+
+---
+
+## Step 2 — Record a loan decision
+
+```bash
+curl -X POST http://127.0.0.1:8000/decision \
+  -H "X-API-Key: dev-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instance_id": "loan-9284",
+    "from_state": "received",
+    "to_state": "approved",
+    "model_version": "credit-model-v3.1",
+    "agent_version": "underwriter-v1.0",
+    "policy_version": "credit-policy-v2",
+    "reason_code": "SCORE_ABOVE_THRESHOLD",
+    "policy_rule": "credit-policy-v2.rule_7",
+    "raw_inputs": {"credit_score": "742", "debt_to_income": "0.28"},
+    "feature_contributions": [
+      {"feature": "credit_score",   "contribution": "0.65"},
+      {"feature": "debt_to_income", "contribution": "-0.12"}
+    ],
+    "threshold_used": "700"
+  }'
+```
+
+Response:
 ```json
 {
-  "status": "ok",
-  "service": "Zorynex Provable AI",
-  "storage_backend": "sqlite",
-  "public_key": "<your public key hex>"
+  "proof_id":     "cef509088ea8...",
+  "sequence_id":  1,
+  "instance_id":  "loan-9284",
+  "current_hash": "b189dc8f0e01...",
+  "proof_url":    "/proof/loan-9284"
 }
 ```
 
----
+**Invisible to the eye — six things happened at once:**
+1. Governance enforced — `credit-model-v3.1` is approved ✓
+2. Credit score `742` hashed — the raw number is never stored ✓
+3. SHA-256 hash computed over the full decision payload ✓
+4. Ed25519 signature applied with your private key ✓
+5. Hash chain linked to all prior decisions for this instance ✓
+6. Written to an append-only ledger — no UPDATE, no DELETE ✓
 
-## Step 0 — Seed Governance Registry
-
-**This step is required before any transitions will succeed.**
-
-Approve the model version, agent version, and policy version that your
-AI system will use. Unauthorized versions are blocked at runtime.
-
-```bash
-curl -X POST http://127.0.0.1:8000/governance/models \
--H "Content-Type: application/json" \
--d '{"model_version": "credit_model_v1"}'
-```
-
-```bash
-curl -X POST http://127.0.0.1:8000/governance/agents \
--H "Content-Type: application/json" \
--d '{"agent_version": "loan_agent_v1"}'
-```
-
-```bash
-curl -X POST http://127.0.0.1:8000/governance/policies \
--H "Content-Type: application/json" \
--d '{"policy_version": "policy_v1", "active": true}'
-```
-
-Verify governance is seeded:
-
-```bash
-curl http://127.0.0.1:8000/governance/status
-```
-
-Expected:
-
-```json
-{
-  "approved_models": [{"model_version": "credit_model_v1", "created_at": "..."}],
-  "approved_agents": [{"agent_version": "loan_agent_v1", "created_at": "..."}],
-  "approved_policies": [{"policy_version": "policy_v1", "active": 1, "created_at": "..."}]
-}
-```
+**What to say:**
+*"Notice `sequence_id: 1`. Every decision gets a sequence number. If a record is ever deleted or reordered, the sequence breaks. The mathematics catches it — not an audit log."*
 
 ---
 
-## Step 1 — Compile Deterministic Loan Protocol
-
-Compile a workflow protocol describing the allowed decision states.
-
-```
-submitted → review → approved
-```
+## Step 3 — Record the funding step
 
 ```bash
-curl -X POST http://127.0.0.1:8000/compile \
--H "Content-Type: application/json" \
--d '{
-  "source": "{\"states\":[\"submitted\",\"review\",\"approved\"],\"initial_state\":\"submitted\",\"transitions\":[{\"from_state\":\"submitted\",\"to_state\":\"review\"},{\"from_state\":\"review\",\"to_state\":\"approved\"}]}"
-}'
+curl -X POST http://127.0.0.1:8000/decision \
+  -H "X-API-Key: dev-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instance_id": "loan-9284",
+    "from_state":  "approved",
+    "to_state":    "funded",
+    "model_version":  "credit-model-v3.1",
+    "agent_version":  "underwriter-v1.0",
+    "policy_version": "credit-policy-v2",
+    "reason_code": "MANUAL_REVIEW_PASSED",
+    "policy_rule": "credit-policy-v2.rule_12",
+    "raw_inputs":  {"reviewer_id": "usr-991"}
+  }'
 ```
 
-Expected:
-
-```json
-{
-  "determinism_certificate": {
-    "protocol_hash": "<64-char hex>",
-    "proof_hash": "<64-char hex>",
-    "grammar_version": "0.1",
-    "compiler_version": "0.1"
-  }
-}
-```
-
-The `protocol_hash` is deterministic — the same spec always produces the same hash.
+Response shows `sequence_id: 2`. The hash of this proof depends on the hash of proof 1. Reorder them, insert anything between them, or delete either one — the chain breaks. Every time.
 
 ---
 
-## Step 2 — Create Loan Instance
-
-Create a new loan decision instance.
+## Step 4 — Export the proof package
 
 ```bash
-curl -X POST http://127.0.0.1:8000/instances \
--H "Content-Type: application/json" \
--d '{"instance_id": "loan_demo_1"}'
+curl "http://127.0.0.1:8000/proof/export/loan-9284?inline=true" \
+  -H "X-API-Key: dev-key" \
+  -o proof.json
 ```
 
-Expected:
+`proof.json` is a single self-contained file. It contains the full decision chain, the cryptographic hash chain, the Ed25519 signatures, and the public key needed to verify everything.
 
-```json
-{
-  "instance_id": "loan_demo_1",
-  "state": "submitted"
-}
-```
+Hand it to anyone. They need no access to your server, database, or organisation — ever.
+
+**What to say:**
+*"This file is the proof. Not a log entry. Not a screenshot. A cryptographically sealed record that stands on its own, forever."*
 
 ---
 
-## Step 3 — Transition to Review
+## Step 5 — Verify offline
 
-The AI risk model evaluates the loan.
+### Option A — Browser (best for compliance and auditor audiences)
+
+```
+open http://127.0.0.1:8000/verify-ui
+```
+
+Drag `proof.json` into the page. Four checks run in the browser — no data leaves the device.
+
+```
+✓ Package structure valid   (2 proofs in package)
+✓ Package untampered        (SHA-256 of full ledger matches)
+✓ Chain valid               (2 proofs, sequence 1→2)
+✓ Signature valid           (Ed25519  key: env-7492b963...)
+
+RESULT:  VERIFIED ✓
+Instance:    loan-9284
+Final state: funded
+```
+
+Download the PDF verification report for the auditor's records.
+
+### Option B — CLI (best for developer audiences)
 
 ```bash
-curl -X POST http://127.0.0.1:8000/instances/loan_demo_1/transition \
--H "Content-Type: application/json" \
--d '{
-  "target_state": "review",
-  "actor": "risk_model",
-  "input_hash": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-  "output_hash": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
-  "model_version": "credit_model_v1",
-  "agent_version": "loan_agent_v1",
-  "policy_version": "policy_v1",
-  "metadata_json": "{\"score\": 720, \"reason\": \"income_verified\"}"
-}'
+python verify/verify_package.py proof.json
 ```
 
-Expected:
+### Option C — API (best for integration audiences)
 
-```json
-{
-  "new_state": "review",
-  "version": 1,
-  "ledger_hash": "<64-char hex>"
-}
+```bash
+curl -X POST http://127.0.0.1:8000/verify-package \
+  -H "X-API-Key: dev-key" \
+  -H "Content-Type: application/json" \
+  -d @proof.json
 ```
 
-The decision is now recorded in the cryptographic ledger.
+**What to say:**
+*"An auditor opens this link. Drops the file. That's their verification — no call to our API, no database query, no trust in us required. The cryptography is self-contained."*
 
 ---
 
-## Step 4 — Transition to Approved
+## Step 6 — Demonstrate tamper detection
 
-The system approves the loan.
+**This is the moment that lands.**
+
+Open `proof.json` in any text editor. Find `"to_state": "approved"` and change it to `"to_state": "rejected"`. Save. Run the verifier.
 
 ```bash
-curl -X POST http://127.0.0.1:8000/instances/loan_demo_1/transition \
--H "Content-Type: application/json" \
--d '{
-  "target_state": "approved",
-  "actor": "risk_model",
-  "input_hash": "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-  "output_hash": "d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5",
-  "model_version": "credit_model_v1",
-  "agent_version": "loan_agent_v1",
-  "policy_version": "policy_v1",
-  "metadata_json": "{\"decision\": \"approved\", \"amount\": 50000}"
-}'
+python verify/verify_package.py proof.json
 ```
 
-Expected:
-
-```json
-{
-  "new_state": "approved",
-  "version": 2,
-  "ledger_hash": "<64-char hex>"
-}
+Output:
 ```
+  ✓ Package structure valid
+  ✗ Package untampered
+       Hash mismatch — package was modified after export.
+       stored:   b189dc8f0e01150b...
+       computed: a72f3c91d84bb02e...
+
+  RESULT:  VERIFICATION FAILED ✗
+```
+
+One character changed. Caught instantly.
+
+**What to say:**
+*"No audit log to check. No database to query. The mathematics detected it. This is what makes AI governance provable — not just documented. The moment any field changes, anywhere in the chain, verification fails. There is no way around it."*
 
 ---
 
-## Step 5 — Check Ledger Entry Count
+## What each audience needs to hear
 
-```bash
-curl http://127.0.0.1:8000/ledger/loan_demo_1/count
+**Developers:**
+- Simple mode: just `instance_id`, `from_state`, `to_state`, `raw_inputs` — governance auto-resolves
+- Python SDK: `client.record_decision(...)` — one line
+- Verification: same algorithm in Python, TypeScript, and the browser
+
+**Compliance / Legal:**
+- The proof is created at decision time — not reconstructed after the fact
+- Raw inputs are hashed — no PII in the proof ledger
+- The public key is embedded — no external key registry needed for verification
+- RFC 3161 external timestamps available for independent time proof
+
+**CRO / Risk Leadership:**
+- SR 11-7, EU AI Act, CFPB adverse action — all addressed in the compliance export (`GET /audit/compliance`)
+- Regulatory examination: hand the auditor a file, they verify in minutes, not weeks
+- Governance is enforced — unapproved model versions are rejected before the decision is recorded
+
+**Investors:**
+- Every enterprise AI deployment has this problem — no provable audit trail
+- The moat: the proof format is open, the verification is offline, the customer data stays with the customer
+- Current alternatives: log everything and hope, or build it in-house
+
+---
+
+## Demo checklist
+
 ```
-
-Expected:
-
-```json
-{
-  "instance_id": "loan_demo_1",
-  "entry_count": 2
-}
+☐ python bootstrap.py --start runs cleanly
+☐ /docs opens, Authorize works with dev-key
+☐ POST /demo/bootstrap returns status: ready
+☐ POST /decision (full mode) returns proof_id, sequence_id: 1
+☐ Second POST /decision returns sequence_id: 2
+☐ GET /proof/export returns proof.json with 2 entries
+☐ /verify-ui: 4 green checkmarks, PDF downloads
+☐ CLI: RESULT: VERIFIED ✓
+☐ POST /verify-package: verified: true
+☐ Tampered proof: VERIFICATION FAILED ✗ with hash mismatch shown
 ```
 
 ---
 
-## Step 6 — Deterministic Replay Validation
+## Common questions and answers
 
-Rebuild the execution path from the ledger.
+**"Can someone alter the proof before it's written?"**
+The proof is signed and hashed in-process at the moment the decision is recorded, before anything is written to the ledger. The signature covers the hash, and the hash covers the full payload.
 
-```bash
-curl http://127.0.0.1:8000/ledger/loan_demo_1/replay
-```
+**"What if your server goes down after we export?"**
+`proof.json` is fully self-contained. Verification works with zero server access, permanently. The public key is embedded in the file.
 
-Expected:
+**"What if someone replaces the entire database?"**
+With RFC 3161 timestamps enabled, each proof is submitted to FreeTSA — an independent external timestamp authority. Even if your entire database is replaced, the external timestamps prove what existed and when.
 
-```json
-{
-  "valid": true,
-  "final_state": "approved"
-}
-```
+**"Is this a blockchain?"**
+No. A blockchain requires decentralised consensus across untrusted parties. This is a cryptographic hash chain — the same mathematical property (any change breaks the chain), without the complexity, latency, or cost.
 
-This confirms the ledger reconstructs the same decision state.
-
----
-
-## Step 7 — Export Signed Proof Package
-
-Export a portable cryptographic proof artifact.
-
-```bash
-curl http://127.0.0.1:8000/ledger/loan_demo_1/export > proof_demo.json
-```
-
-The proof package contains:
-
-- `type` — proof package identifier
-- `public_key` — Ed25519 public key
-- `signature` — outer package signature (covers entire proof blob)
-- `proof.protocol` — compiled decision protocol
-- `proof.instance` — instance metadata
-- `proof.ledger` — all signed ledger entries
-- `proof.instance_root` — Merkle root of all ledger hashes
-
-This artifact is self-contained and can be verified offline forever.
-
----
-
-## Step 8 — Independent Offline Verification
-
-Verify the proof without the Zorynex server.
-
-```bash
-python cli.py verify proof_demo.json
-```
-
-Expected output:
-
-```
-VALID: Proof verified successfully
-Final state: approved
-Instance:    loan_demo_1
-```
-
-This is **trustless verification** — no server access required, no trust assumptions.
-
----
-
-## Step 9 — System Integrity Root
-
-Retrieve the cryptographic root representing the full system state.
-
-```bash
-curl http://127.0.0.1:8000/system/root
-```
-
-Expected:
-
-```json
-{
-  "system_root": "<64-char Merkle root hex>"
-}
-```
-
-Save this value. You can use it to detect drift between environments.
-
----
-
-## Step 10 — Cross-Environment Drift Detection
-
-Compare system roots between environments (e.g. prod vs staging).
-
-```bash
-curl "http://127.0.0.1:8000/system/drift/compare?external_root=<paste_root_here>"
-```
-
-Expected when roots match:
-
-```json
-{
-  "match": true,
-  "current_root": "...",
-  "external_root": "..."
-}
-```
-
-A mismatch indicates environmental drift or tampering.
-
----
-
-## What This Demo Proves
-
-- Deterministic state machine enforcement
-- AI governance validation (unauthorized models blocked)
-- Cryptographic execution ledger (hash chain + Ed25519 signatures)
-- Replay-based decision validation
-- Immutable decision records (frozen on export)
-- Signed proof artifact generation
-- Independent offline verification
-- Merkle root system integrity
-- Cross-environment drift detection
-
----
-
-## Key Insight
-
-Zorynex converts opaque AI decisions into **cryptographically provable execution records** that auditors, regulators, and enterprise clients can independently verify — without trusting internal systems, without server access, and without reconstructing evidence after the fact.
+**"What about GDPR? You're storing decision data."**
+Raw inputs are SHA-256 hashed before storage. The hash is stored, not the value. You can respond to a GDPR deletion request by noting that only the hash of the input was ever stored — the original data never entered the proof ledger.

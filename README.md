@@ -1,188 +1,272 @@
-# Provable AI
+# Zorynex — Provable AI Infrastructure
 
-[![License](https://img.shields.io/badge/license-Zorynex%20Source--Available-blue)](https://github.com/futureaihub/provable-ai/blob/main/LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11-blue)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-73%20passing-brightgreen)](https://github.com/futureaihub/provable-ai/tree/main/tests)
-[![Status](https://img.shields.io/badge/status-experimental-orange)](https://github.com/futureaihub/provable-ai)
+[![License](https://img.shields.io/badge/license-Zorynex%20Source--Available-blue)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
+[![Tests](https://img.shields.io/badge/tests-576%20passing-brightgreen)](tests/)
+[![Status](https://img.shields.io/badge/status-production--ready-green)]()
 
-Infrastructure for **cryptographically verifiable AI decisions**.
+Every AI decision becomes a cryptographic proof artifact — tamper-evident, hash-chained, independently verifiable with zero server access.
 
-Every AI decision your system makes becomes a **signed proof artifact** — independently verifiable by regulators, auditors, and enterprise clients. No trust required. No server access needed.
-
----
-
-## What It Does
-
-Provable AI converts AI loan and risk decisions into **cryptographic proof artifacts** that regulators and auditors can independently verify.
-
-Instead of trusting internal logs or opaque AI outputs, decisions are recorded as **deterministic state transitions** backed by:
-
-- **SHA-256 hash chains** — tamper-evident ledger
-- **Ed25519 signatures** — every decision cryptographically signed via PyNaCl
-- **Merkle roots** — replay-verifiable state
-- **Offline verification** — no server trust required
+**The core property:** An auditor receives a file. They verify it on their own machine. No call to your API. No database access. No trust in your organisation required. The mathematics proves it.
 
 ---
 
-## Core Features
-
-| # | Feature | Description |
-|---|---------|-------------|
-| 01 | Deterministic Decision Protocols | Workflow specs compile to protocol hash via grammar rules engine |
-| 02 | Governance Enforcement | Models, agents, and policies validated at runtime — unauthorized blocked |
-| 03 | Cryptographic Execution Ledger | SHA-256 hash chain + Ed25519 signature on every decision |
-| 04 | Version-Locked Execution | Exact model + policy + canonical state captured at execution time |
-| 05 | Signed Proof Artifact Export | Portable signed JSON — `curl /ledger/<id>/export > proof.json` |
-| 06 | Independent Verification CLI | `python cli.py verify proof.json` — fully offline |
-| 07 | Replay-based Tamper Detection | Merkle root replay via verify_core.py detects any modification |
-| 08 | Environment Drift Detection | System root comparison across dev, staging, and production |
-
----
-
-## Quick Start
-
-**Clone and install:**
+## Get started in 3 commands
 
 ```bash
-git clone https://github.com/futureaihub/provable-ai.git
+git clone https://github.com/zorynex/provable-ai
 cd provable-ai
-
-python3 -m venv venv
-source venv/bin/activate
-
 pip install -r requirements.txt
+
+python bootstrap.py --start   # generates keys, initialises DB, starts server
 ```
 
-**Start the server:**
+Open **http://127.0.0.1:8000/quickstart** for a copy-paste guide to your first proof, or go straight to **http://127.0.0.1:8000/docs** → Authorize (`X-API-Key: dev-key`) → run `POST /demo/bootstrap`.
+
+---
+
+## After first run
 
 ```bash
-uvicorn server.main:app --reload
+# One-line start
+source .env && uvicorn server.main:app --reload
 ```
 
-**Record a decision:**
+Startup banner:
+```
+==============================================================
+  Zorynex Provable AI  ·  Cryptographic proof infrastructure
+==============================================================
+  Swagger UI →  http://127.0.0.1:8000/docs
+  ReDoc      →  http://127.0.0.1:8000/redoc
+  Quickstart →  http://127.0.0.1:8000/quickstart
+  Verify UI  →  http://127.0.0.1:8000/verify-ui
+==============================================================
+```
+
+---
+
+## What it does
+
+- **Signs every AI decision** with Ed25519 — any modification is immediately detectable
+- **Hash-chains decisions** — the full sequence of events is cryptographically provable
+- **Hashes sensitive inputs** — no PII stored in the proof, but inputs are auditable
+- **Enforces governance** — only approved models, agents, and policies can write decisions
+- **Verifiable offline** — auditors verify with zero access to your infrastructure
+- **Anchors externally** — optional RFC 3161 timestamps from FreeTSA, outside your control boundary
+
+---
+
+## The 4-step proof lifecycle
+
+```
+POST /decision          →  decision recorded, signed, hash-chained
+GET  /proof/export/{id} →  self-contained proof.json exported
+POST /verify-package    →  4 cryptographic checks in 200ms
+open /verify-ui         →  auditor drags file in, sees green or red
+```
+
+---
+
+## API at a glance
+
+| | Endpoint | What it does |
+|---|---|---|
+| 🚀 | `POST /demo/bootstrap` | Seed a complete demo environment in one call |
+| 🚀 | `POST /decision` | Record an AI decision — simple or full mode |
+| 🚀 | `GET /proof/export/{id}?inline=true` | Export a verifiable proof package |
+| 🚀 | `POST /verify-package` | Verify a package — 4 cryptographic checks |
+| ⚙️ | `POST /protocol/compile` | Define workflow states and transitions |
+| ⚙️ | `POST /governance/model` | Approve a model version |
+| ⚙️ | `POST /instance/create` | Create a workflow instance |
+| 🔍 | `GET /proof/{id}` | Retrieve a single proof |
+| 🔍 | `GET /chain/{id}` | Full decision chain |
+| 🛡 | `GET /audit/compliance` | SR 11-7 / EU AI Act / CFPB compliance pack |
+| 🩺 | `GET /health` | Liveness probe |
+
+Full reference: [/docs](http://127.0.0.1:8000/docs) · [/redoc](http://127.0.0.1:8000/redoc)
+
+---
+
+## Simple mode — record a decision in 4 fields
+
+Governance auto-resolves from your approved lists:
 
 ```bash
-curl -X POST http://localhost:8000/decisions/record \
+curl -X POST http://127.0.0.1:8000/decision \
+  -H "X-API-Key: dev-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "instance_id": "loan_9284",
-    "workflow": "credit_approval_v3",
-    "model_version": "credit_model_v3.1",
-    "inputs": {"score": 720, "dti": 0.28},
-    "output": "approved"
+    "instance_id": "loan-9284",
+    "from_state":  "received",
+    "to_state":    "approved",
+    "raw_inputs":  {"credit_score": "742"}
   }'
 ```
 
-**Export a proof artifact:**
+---
 
+## Verification — three ways, same result
+
+**Browser — for auditors (no code, no API key needed):**
+```
+open http://127.0.0.1:8000/verify-ui
+```
+Drag and drop a proof package. Four green checkmarks. Download a PDF report.
+
+**CLI — for engineers:**
 ```bash
-curl http://localhost:8000/ledger/loan_9284/export > proof.json
+python verify/verify_package.py proof.json
+# ✓ Package structure valid
+# ✓ Package untampered
+# ✓ Chain valid
+# ✓ Signature valid
+# RESULT: VERIFIED ✓
 ```
 
-**Verify independently:**
-
+**API — for integrations:**
 ```bash
-python cli.py verify proof.json
-```
-
-```
-✓ VALID: Proof verified successfully
-
-  signature_algo   Ed25519
-  hash_algo        SHA-256 chain
-  model_version    credit_model_v3.1
-  governance       all policies enforced
-  state_locked     true
-  tamper_detected  false
-  replay_valid     true
-  final_state      approved
+curl -X POST http://127.0.0.1:8000/verify-package \
+  -H "X-API-Key: dev-key" -d @proof.json
 ```
 
 ---
 
-## Production Deployment
+## Python SDK — zero dependencies
 
-**Docker (recommended):**
+```python
+from sdk.zorynex import ZorynexClient
 
-```bash
-docker-compose -f docker-compose.prod.yml up -d
+client = ZorynexClient(base_url="http://127.0.0.1:8000", api_key="dev-key")
+
+client.bootstrap()  # seed demo environment
+
+proof = client.record_decision(
+    instance_id="loan-9284", from_state="received", to_state="approved",
+    raw_inputs={"credit_score": "742"},
+)
+
+package = client.export_proof("loan-9284")
+result  = client.verify_package(package)
+print(result["verified"])  # True
 ```
 
-Production configuration includes:
-- Authentication middleware
-- Rate limiting
-- Audit logging
-- Secrets management via environment variables or AWS Secrets Manager
-- Health check endpoint: `GET /health`
+**TypeScript:** `sdk/zorynex.ts` — Node 18+, Deno, browser, Bun.
 
-**Environment variables:**
+**Postman:** Import `sdk/zorynex.postman_collection.json` — 38 requests, 7 folders, pre-configured variables.
 
+---
+
+## Deployment
+
+## Docker
+
+**Dev (SQLite, zero config):**
 ```bash
-SECRET_KEY=your-secret-key
-SIGNING_KEY_PATH=provable_key.hex
-LEDGER_DB_PATH=ledger.db
-LOG_LEVEL=INFO
+docker compose -f docker-compose.sqlite.yml up
+# → http://127.0.0.1:8000/docs   X-API-Key: dev-key
+```
+
+**Full stack (PostgreSQL):**
+```bash
+docker compose up --build
 ```
 
 ---
 
-## Verification Tools
+## Configuration
 
-Three verification tools are available depending on context:
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ZORYNEX_SIGNING_KEY` | Yes | auto-generated by bootstrap | 64-char hex Ed25519 private key |
+| `ZORYNEX_API_KEYS` | Yes | `dev-key:admin` | `key:role,key:role` |
+| `ZORYNEX_WEBHOOK_SECRET` | Yes | auto-generated by bootstrap | HMAC secret |
+| `ZORYNEX_DB_PATH` | No | `provable_ai.db` | SQLite path |
+| `DATABASE_URL` | Prod | — | PostgreSQL connection string |
+| `ZORYNEX_BACKEND` | No | `sqlite` | `sqlite` or `postgres` |
+| `ZORYNEX_REQUIRE_TENANT` | No | `false` | Enforce `X-Tenant-Id` in production |
+| `ZORYNEX_ANCHOR_RFC3161` | No | `false` | Enable FreeTSA external timestamps |
 
-**`python cli.py verify proof.json`**
-Primary CLI — full verification with human-readable output.
-
-**`python tools/offline_verify.py proof.json`**
-Standalone offline verifier — no dependencies on server or ledger. For use by auditors and regulators who receive a proof artifact without system access.
-
-**`python tools/verify_core.py`**
-Core verification module — used internally by both CLI tools. Implements full SHA-256 chain verification, Ed25519 signature check, and Merkle root replay.
+`python bootstrap.py` generates all required values and writes `.env`.
 
 ---
 
-## Regulatory Alignment
+## Architecture
 
-| Regulation | Requirement | How Provable AI Addresses It |
-|-----------|------------|------------------------------|
-| SR 11-7 | Model risk management, reproducible validation evidence | Version-locked execution + cryptographic proof artifacts |
-| EU AI Act Art. 9 | Active risk management system for high-risk AI | Governance enforcement gate on every decision |
-| EU AI Act Art. 13 | Transparency and documentation of AI decisions | Signed proof artifact with full decision chain |
-| CFPB Adverse Action | Proof of AI decision correctness | Independent verification CLI for auditors |
+```
+GovernanceEngine
+├── SQLiteStorage / PostgreSQLHardenedStorage  — append-only proof ledger
+├── EnvSigner / KmsSigner / FailoverSigner     — Ed25519 signing
+└── Verifier                                   — offline chain verification
+
+FastAPI server  (admin / auditor / system RBAC)
+├── quickstart   POST /demo/bootstrap, POST /decision, proof export + verify
+├── configure    Protocol, governance, instances
+├── verify       Proof retrieval, chain, package verification
+├── audit        Compliance exports, anchoring, key registry
+└── monitor      Health, metrics, drift detection
+```
+
+CLI tools:
+
+```bash
+python cli.py verify proof.json           # verify a proof package
+python verify/verify_package.py proof.json # standalone verifier (zero deps)
+```
+
+---
+
+## Project structure
+
+```
+provable_ai/     core library — engine, storage, signer, verifier, audit
+server/          FastAPI application — 34 endpoints across 8 tag groups
+sdk/             Python SDK · TypeScript SDK · Postman collection
+verify/          Standalone verifier scripts — zero Zorynex dependency
+web/             Browser proof verifier (verifier.html)
+docs/            dev.md · auditor.md · cro.md · integration.md · demo_steps.md
+tests/           576 tests across 13 files — all passing
+examples/        Loan decisioning end-to-end example
+migrations/      Alembic PostgreSQL migrations
+```
 
 ---
 
 ## Tests
 
 ```bash
-pytest tests/ -v
+pytest tests/ -q              # 576 tests, all passing
+pytest tests/test_chaos.py    # chaos scenarios: DB down, KMS down, disk full
 ```
 
-73 tests covering:
-- Engine determinism and state transition correctness
-- Grammar rules enforcement
-- Cryptographic signing and verification
-- Hash chain integrity
-- Tamper detection replay
+---
+
+## Regulatory alignment
+
+| Regulation | How Zorynex addresses it |
+|---|---|
+| SR 11-7 | Version-locked execution captured at runtime — not reconstructed after the fact |
+| EU AI Act Art. 9 | Governance enforcement gate — unapproved versions are blocked |
+| EU AI Act Art. 13 | Signed proof artifact with full decision chain, verifiable offline |
+| CFPB Adverse Action | `reason_code`, `feature_contributions`, `threshold_used` embedded in every proof |
+| GDPR Art. 17 | Only input hashes stored — raw PII never enters the proof ledger |
 
 ---
 
-## Licence
+## Honest limits
 
-This project is licensed under the **Zorynex Source-Available Licence**.
-
-- **Evaluation use:** Free to view, clone, and run locally for non-commercial evaluation
-- **Commercial use:** Requires a commercial licence from Zorynex
-
-See [LICENSE](LICENSE) for full terms.
-
-Commercial licensing: [hanif@zorynex.co](mailto:hanif@zorynex.co)
+- **Tamper-evident**, not tamper-proof — detects modification, cannot physically prevent it
+- **Verifiable**, not trustless — the signing key lives inside your control boundary
+- **Secure by design**, not immune to ops mistakes — key management is your responsibility
 
 ---
 
-## Contact
+## Commercial use
 
-**Hanif Shaik** — Founder, Zorynex  
-[hanif@zorynex.co](mailto:hanif@zorynex.co)  
-[zorynex.co](https://zorynex.co)  
-[github.com/futureaihub/provable-ai](https://github.com/futureaihub/provable-ai)
+This repository is source-available for evaluation. Production use requires a commercial licence.
+
+Contact **hanif@zorynex.co** — subject: Commercial Licence Enquiry.
+
+---
+
+[docs/dev.md](docs/dev.md) · [docs/auditor.md](docs/auditor.md) · [docs/cro.md](docs/cro.md) · [docs/integration.md](docs/integration.md) · [SECURITY.md](SECURITY.md) · [LICENSE](LICENSE)

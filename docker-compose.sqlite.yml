@@ -1,0 +1,51 @@
+# Zorynex — Zero-config SQLite dev server
+# Usage: docker compose -f docker-compose.sqlite.yml up
+# → http://127.0.0.1:8000/docs   X-API-Key: dev-key
+
+services:
+  zorynex:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - zorynex_data:/data
+      - ./provable_ai:/app/provable_ai:ro
+      - ./server:/app/server:ro
+      - ./web:/app/web:ro
+      - ./verify:/app/verify:ro
+    environment:
+      ZORYNEX_BACKEND:         sqlite
+      ZORYNEX_DB_PATH:         /data/provable_ai.db
+      ZORYNEX_AUDIT_DB_PATH:   /data/zorynex_audit.db
+      ZORYNEX_ANCHOR_DB_PATH:  /data/zorynex_anchors.db
+      ZORYNEX_KEYREGISTRY_DB_PATH: /data/zorynex_keyregistry.db
+      ZORYNEX_DRIFT_DB_PATH:   /data/zorynex_drift.db
+      ZORYNEX_API_KEYS:        "dev-key:admin,audit-key:auditor,sys-key:system"
+      ZORYNEX_WEBHOOK_SECRET:  "dev-webhook-secret"
+      ZORYNEX_ENV:             development
+      ZORYNEX_REQUIRE_TENANT:  "false"
+      ZORYNEX_ANCHOR_RFC3161:  "false"
+      ZORYNEX_WORKERS:         "1"
+    command: >
+      sh -c "
+        python3 -c \"
+from nacl.signing import SigningKey
+import os
+key = os.environ.get('ZORYNEX_SIGNING_KEY') or SigningKey.generate().encode().hex()
+with open('/tmp/key.env','w') as f: f.write('ZORYNEX_SIGNING_KEY='+key+'\\n')
+print('Signing key ready:', 'env-'+key[:16])
+\" &&
+        export ZORYNEX_SIGNING_KEY=$(grep ZORYNEX_SIGNING_KEY /tmp/key.env | cut -d= -f2) &&
+        python3 -m uvicorn server.main:app --host 0.0.0.0 --port 8000 --workers 1 --reload
+      "
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  zorynex_data:

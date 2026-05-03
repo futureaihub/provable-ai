@@ -1,185 +1,153 @@
-# Security Policy
+# Zorynex Security Policy
 
-## Overview
+## Reporting a vulnerability
 
-Provable AI is security-sensitive infrastructure. The system produces
-cryptographic proof artifacts used by regulators and auditors to verify
-AI decisions in financial services. We take security reports seriously
-and respond promptly.
+**Do not open a public GitHub issue for security vulnerabilities.**
 
----
-
-## Supported Versions
-
-| Version | Supported |
-|---------|-----------|
-| main branch | ✅ Active |
-| Tagged releases | ✅ Active |
-| Forks / derivatives | ❌ Not supported |
-
----
-
-## Cryptographic Components
-
-The following cryptographic primitives are used in this system:
-
-### SHA-256 Hash Chains (hashlib)
-- Used in: `provable_ai/signer.py`, `provable_ai/storage.py`
-- Purpose: Tamper-evident hash chain linking each decision record
-- Every ledger entry includes `prev_hash` (SHA-256 of previous record)
-- Altering any record breaks the chain — detectable via replay
-
-### Ed25519 Digital Signatures (PyNaCl / libsodium)
-- Used in: `provable_ai/signer.py`
-- Purpose: Cryptographic signing of every proof artifact
-- Key generation: `SigningKey.generate()` on first run
-- Key storage: `provable_key.hex` — private key file
-- Public key: Shareable for external verification
-
-### Merkle Roots
-- Used in: `provable_ai/engine.py`, `tools/verify_core.py`
-- Purpose: Replay-verifiable state for tamper detection
-- Enables reconstruction of any execution history
-
-### Verification Chain
-- `tools/verify_core.py` — 224-line core verification module
-- `tools/verify_proof.py` — Proof artifact parser and validator
-- `tools/offline_verify.py` — Standalone offline verifier
-- `cli.py` — Root CLI entry point
-
----
-
-## Private Key Security
-
-**The file `provable_key.hex` contains your Ed25519 private signing key.**
-
-Critical requirements:
-- **Never commit `provable_key.hex` to version control**
-- The `.gitignore` file excludes this file by default — do not remove this entry
-- In production, manage the key path via the `SIGNING_KEY_PATH` environment variable
-- Rotate the signing key if it is ever exposed
-- Back up the key securely — losing it means previously signed proofs cannot be re-signed
-
-In production Docker deployments, inject the key via Docker secrets or
-AWS Secrets Manager rather than the filesystem.
-
----
-
-## Production Security
-
-The production FastAPI server (`server/main.py`) includes:
-
-- **Authentication middleware** — API key or token-based auth
-- **Rate limiting** — prevents abuse of the decision recording endpoint
-- **Audit logging** — all API calls logged for internal review
-- **Input validation** — request schema validation on all endpoints
-
-**Environment variables for production:**
-
-```bash
-SECRET_KEY=your-secret-key          # API authentication
-SIGNING_KEY_PATH=provable_key.hex   # Ed25519 key location
-LEDGER_DB_PATH=ledger.db            # SQLite ledger path
-LOG_LEVEL=INFO                      # Logging verbosity
-```
-
-**Docker production deployment:**
-
-```bash
-docker-compose -f docker-compose.prod.yml up -d
-```
-
-The production compose file enforces:
-- Non-root container user
-- Read-only filesystem where possible
-- Health check on `/health` endpoint
-- No exposed debug endpoints
-
----
-
-## Reporting a Vulnerability
-
-**Do not report security vulnerabilities in public GitHub issues.**
-
-Report vulnerabilities privately to:
-
-**Email:** hanif@zorynex.co  
-**Subject:** `[SECURITY] Brief description`
-
-### What to include
-
+Email **security@zorynex.co** with:
 - Description of the vulnerability
 - Steps to reproduce
-- Which component is affected (engine.py, signer.py, verify_core.py, etc.)
-- Potential impact — specifically whether proof artifact integrity could be compromised
-- Your name / handle for attribution (optional)
+- Impact assessment
+- Any proposed fix
 
-### What happens next
-
-| Timeline | Action |
-|----------|--------|
-| Within 48 hours | Acknowledgement of report |
-| Within 7 days | Initial assessment and severity rating |
-| Within 30 days | Fix developed and tested |
-| Within 45 days | Fix released and reporter notified |
-
-We will credit security researchers in release notes unless anonymity is requested.
+You will receive acknowledgement within 48 hours and a resolution timeline within 7 days. We follow coordinated disclosure — reporter is credited unless anonymity is requested.
 
 ---
 
-## Threat Model
+## Scope
 
-**In scope — we want to know about:**
-
-- Vulnerabilities that allow forging or altering proof artifacts without detection
-- Weaknesses in the SHA-256 hash chain implementation that allow chain manipulation
-- Ed25519 signing vulnerabilities that allow signature forgery
-- Merkle root manipulation that defeats replay-based tamper detection
-- Authentication bypass in the FastAPI server
-- Private key exposure through the API or filesystem
-- Replay attacks on the verification CLI
-- SQLite ledger manipulation that bypasses tamper detection
-
-**Out of scope:**
-
-- Vulnerabilities in upstream dependencies (PyNaCl, FastAPI, SQLite) — report directly to those projects
-- Social engineering attacks
-- Physical access attacks
-- Denial of service without cryptographic impact
-- Missing security headers on non-production deployments
+This policy covers `provable_ai/`, `server/`, `tools/`, `verify/`, and `sdk/`.
 
 ---
 
-## Dependency Security
+## What Zorynex protects
 
-Key dependencies and their security posture:
-
-| Package | Purpose | Security Notes |
-|---------|---------|----------------|
-| PyNaCl | Ed25519 signatures | Wrapper around libsodium — audited cryptography library |
-| FastAPI | API server | Actively maintained — update regularly |
-| SQLite | Ledger storage | Append-only access pattern — no remote connections |
-| hashlib | SHA-256 chains | Python standard library — no external dependency |
-
-Run `pip audit` against `requirements.txt` to check for known vulnerabilities in dependencies.
+| Property | Guarantee |
+|---|---|
+| **Decision integrity** | Any modification to a recorded decision is detectable via SHA-256 hash mismatch |
+| **Sequence integrity** | Any insertion, deletion, or reordering of decisions is detectable via hash chain linkage |
+| **Input privacy** | Raw inputs are SHA-256 hashed before storage — sensitive values never appear in the proof ledger |
+| **External anchoring** | RFC 3161 timestamps from FreeTSA are outside your infrastructure's control boundary |
+| **Governance enforcement** | Decisions from unapproved model, agent, or policy versions are blocked at the gate — not just logged |
 
 ---
 
-## Verification Security
+## What Zorynex does NOT protect against
 
-The independent verification tools are designed to operate without trusting the originating system:
-
-- `offline_verify.py` has no network calls — fully airgapped
-- `verify_core.py` implements verification from first principles — no shortcuts
-- Proof artifacts are self-contained — no external lookups required
-- The public key for signature verification can be distributed separately from the proof
-
-This means a regulator or auditor can verify proof artifacts without any access to your infrastructure, reducing the attack surface for evidence manipulation.
+| Threat | Mitigation |
+|---|---|
+| Compromised signing key | Rotate immediately. All prior proofs remain verifiable with the old public key (embedded in each proof). |
+| Database-level rewrite by a privileged attacker | RFC 3161 external timestamps + optional S3 anchoring provide independent evidence outside your infrastructure. |
+| Infrastructure compromise | Standard operations security: network isolation, secrets management, access control, audit logs. |
+| Side-channel attacks on signing key | Use `AWSKmsSigner` or `GCPKmsSigner` instead of `EnvSigner` — private key never leaves the KMS. |
 
 ---
 
-## Contact
+## Trust boundary
 
-**Hanif Shaik** — Founder, Zorynex  
-[hanif@zorynex.co](mailto:hanif@zorynex.co)  
-[zorynex.co](https://zorynex.co)
+```
+FreeTSA (external)     ←  outside your control — independent timestamp authority
+         ↓
+Anchor store           ←  separate volume / separate DB file from proof ledger
+         ↓
+Proof ledger           ←  append-only, SHA-256 hash-chained, Ed25519 signed
+         ↓
+Your infrastructure    ←  your responsibility: key management, access control, backups
+```
+
+The key insight: verification works against the exported proof file, not against your infrastructure. An auditor's result does not depend on trusting anything you control.
+
+---
+
+## Key management
+
+**Development**
+
+```bash
+# bootstrap.py generates this automatically
+export ZORYNEX_SIGNING_KEY="64-char-hex-ed25519-private-key"
+# provable_key.hex and .env are in .gitignore — never commit them
+```
+
+**Production**
+
+```bash
+# AWS KMS — private key never leaves the KMS
+export ZORYNEX_KMS_KEY_ID="alias/zorynex-prod"
+export ZORYNEX_KMS_REGION="us-east-1"
+```
+
+**Key rotation**
+
+Register a new key. All future proofs use the new key. Old proofs remain permanently verifiable with the old public key — it is embedded in every proof at signing time.
+
+**Key backup**
+
+Store key material offline, encrypted, in at least two geographically separate locations. The signing key is the root of trust for all proofs. Losing it does not invalidate existing proofs (public key is embedded), but means you cannot issue new ones.
+
+---
+
+## API security
+
+| Control | Detail |
+|---|---|
+| Authentication | `X-API-Key` header required on all non-public endpoints |
+| RBAC | `admin` (full), `auditor` (read-only), `system` (write decisions) |
+| Webhook integrity | HMAC-SHA256 + nonce-based replay protection |
+| Rate limiting | Per-tenant and global limits via `slowapi` |
+| TLS | Nginx terminates TLS in production — app is internal-only |
+| Tenant isolation | `X-Tenant-Id` enforced at DB level — separate ledger per tenant |
+
+---
+
+## Cryptographic specification
+
+| Property | Value |
+|---|---|
+| Signing algorithm | Ed25519 (PyNaCl / libsodium) |
+| Hash algorithm | SHA-256 (Python standard library hashlib) |
+| Canonical JSON | UTF-8, `sort_keys=True`, `separators=(",",":")`, no floats, no datetime objects |
+| What is signed | 32 raw bytes of `current_hash` via Ed25519 |
+| What is hashed | `decision`, `decision_context`, `governance`, `determinism`, `previous_hash`, `sequence_id` |
+| Genesis hash | 64 zero characters — the known starting point of every chain |
+
+---
+
+## Known limitations
+
+**SQLite in production**
+SQLite has no row-level locking. Use PostgreSQL for multi-worker production deployments (`ZORYNEX_BACKEND=postgres`).
+
+**FreeTSA availability**
+RFC 3161 timestamps require network access to FreeTSA. Failures are non-fatal — proofs are still recorded and fully valid without the external timestamp. Anchoring simply provides additional independent evidence.
+
+**Hash chain is not a blockchain**
+The chain provides cryptographic tamper-evidence within your infrastructure. It does not provide decentralised consensus. An attacker with full database and key access could theoretically reconstruct a chain — external anchoring (RFC 3161, S3) is the defence against that.
+
+**Proof records governance at signing time**
+Zorynex records which model, agent, and policy versions were approved and used at the moment of signing. It does not independently validate that those model versions produced the correct output — it proves the record of what happened, not the correctness of the decision itself.
+
+---
+
+## Dependency security
+
+Keep these up to date — they form the security-critical path:
+
+| Package | Role |
+|---|---|
+| `pynacl` | Ed25519 signing and verification |
+| `fastapi` / `uvicorn` | HTTP server layer |
+| `psycopg2-binary` | PostgreSQL driver (production) |
+| `cryptography` | RFC 3161 timestamp verification |
+
+Run `pip install --upgrade -r requirements.txt` regularly and review release notes for security advisories.
+
+---
+
+## Disclosure timeline
+
+1. Reporter submits privately to security@zorynex.co
+2. Acknowledgement within 48 hours
+3. Fix developed and tested internally
+4. Fix released and advisory published simultaneously
+5. Reporter credited in advisory (unless anonymity requested)

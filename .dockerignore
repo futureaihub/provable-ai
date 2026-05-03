@@ -1,0 +1,55 @@
+# Secrets
+.env
+*.env
+.envrc
+provable_key.hex
+*.key
+*.pem
+
+# Dev tooling
+venv/
+.venv/
+node_modules/
+web/node_modules/
+web/dist/
+*.bundle.js
+
+# Databases
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+# Cache / compiled
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.cache/
+.coverage
+htmlcov/
+
+# Backups
+*.backup
+*_backup.py
+provable-ai-backup/
+
+# Git
+.git/
+
+# Docs / tests
+tests/
+benchmarks/
+docs/
+
+# Local exports
+proof_*.json
+proof_export_*.json
+verification_report_*.txt
+*.pdf
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store

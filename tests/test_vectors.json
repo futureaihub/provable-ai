@@ -1,0 +1,184 @@
+{
+  "_comment": "Zorynex canonical JSON test vectors — golden reference",
+  "_version": "zorynex-proof-v1",
+  "_rules": {
+    "encoding": "UTF-8 no BOM",
+    "key_order": "sort_keys=True recursive",
+    "separators": "(\",\" \":\")",
+    "floats": "FORBIDDEN — use int or str",
+    "datetime": "FORBIDDEN — use ISO 8601 str",
+    "algorithm": "SHA-256 over canonical UTF-8 bytes"
+  },
+  "vectors": [
+    {
+      "id": "simple_integers",
+      "description": "Key ordering test",
+      "input": {
+        "a": 1,
+        "b": 2
+      },
+      "canonical_string": "{\"a\":1,\"b\":2}",
+      "sha256": "43258cff783fe7036d8a43033f830adfc60ec037382473548ac742b888292777",
+      "notes": "Keys sorted: a before b. No spaces."
+    },
+    {
+      "id": "nested_key_ordering",
+      "description": "Recursive key sorting in nested objects",
+      "input": {
+        "decision": {
+          "from_state": "pending",
+          "to_state": "approved"
+        },
+        "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "sequence_id": 1
+      },
+      "canonical_string": "{\"decision\":{\"from_state\":\"pending\",\"to_state\":\"approved\"},\"previous_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"sequence_id\":1}",
+      "sha256": "f4fc757e852f0eeb015cc0ef7ce1428d6156167a0c5ad239ac16201a4c592104",
+      "notes": "Nested objects also sorted."
+    },
+    {
+      "id": "full_hash_payload",
+      "description": "Complete realistic proof hash payload",
+      "input": {
+        "decision": {
+          "from_state": "pending",
+          "to_state": "approved"
+        },
+        "decision_context": {
+          "feature_contributions": [],
+          "inputs_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "metadata": {},
+          "model_version": "credit_model_v3.1",
+          "policy_rule": "credit_policy_v2.rule_7",
+          "reason_code": "SCORE_ABOVE_THRESHOLD",
+          "threshold_used": "700"
+        },
+        "determinism": {
+          "external_calls_hash": null,
+          "mode": "strict_deterministic",
+          "seed": null
+        },
+        "governance": {
+          "agent_version": "agent_v1.0",
+          "model_version": "credit_model_v3.1",
+          "policy_version": "credit_policy_v2"
+        },
+        "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "sequence_id": 1
+      },
+      "sha256": "b189dc8f0e01150b3c335e822047999422654c4e338ddcbde6d3b9faa644a454",
+      "notes": "threshold_used is string '700' not int. null serializes as JSON null."
+    },
+    {
+      "id": "unicode_utf8",
+      "description": "UTF-8 must NOT be ASCII-escaped",
+      "input": {
+        "name": "José",
+        "value": 42
+      },
+      "canonical_string": "{\"name\":\"José\",\"value\":42}",
+      "sha256": "05a8e904ecb2c56d69505870f4edc47b28dbdc1c02cf1c541586d6e9cd634ef8",
+      "notes": "é must not become \\u00e9. ensure_ascii=False required."
+    },
+    {
+      "id": "booleans_and_null",
+      "description": "Python True/False/None → JSON true/false/null",
+      "input": {
+        "active": true,
+        "reason": null,
+        "score": 720
+      },
+      "canonical_string": "{\"active\":true,\"reason\":null,\"score\":720}",
+      "sha256": "0b245406af6e7f6ec75323432dd2b0592db5881e26d1a16643868d0889e6fd94",
+      "notes": "JSON null not string 'null'. true/false lowercase."
+    },
+    {
+      "id": "insertion_order_independent",
+      "description": "Same data different dict order → same hash",
+      "input_a": {
+        "z": 3,
+        "a": 1,
+        "m": 2
+      },
+      "input_b": {
+        "a": 1,
+        "m": 2,
+        "z": 3
+      },
+      "sha256": "70d1ebc7a727a476f15f7b4436d65b0bca07718c03a0843fa008659badad79c7",
+      "canonical_string": "{\"a\":1,\"m\":2,\"z\":3}",
+      "notes": "Hash must match regardless of insertion order."
+    }
+  ],
+  "forbidden_inputs": [
+    {
+      "type": "float",
+      "example": 0.28,
+      "correct": "\"0.28\" or 28"
+    },
+    {
+      "type": "datetime",
+      "example": "datetime(2026,4,28)",
+      "correct": "\"2026-04-28T00:00:00Z\""
+    },
+    {
+      "type": "UUID",
+      "example": "UUID('...')",
+      "correct": "\"550e8400-...\""
+    },
+    {
+      "type": "Decimal",
+      "example": "Decimal('720.00')",
+      "correct": "\"720.00\" or 720"
+    }
+  ],
+  "cross_language_verification": {
+    "python": "pytest tests/test_canonical.py",
+    "typescript": "npm test -- --testPathPattern=canonical",
+    "rule": "SHA-256 output must match across all languages for all vectors."
+  },
+  "proof_id_vectors": {
+    "_spec": "proof_id = sha256(f'{current_hash}:{sequence_id}'.encode('utf-8')).hexdigest()",
+    "_encoding": "UTF-8, no spaces, colon separator, integer sequence_id",
+    "vectors": [
+      {
+        "id": "proof_id_seq_1",
+        "current_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sequence_id": 1,
+        "raw_input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:1",
+        "proof_id": "b275cc3e1fd59369adf26b216d0196140480d9a5c0ec5b25151a8c1bef346cf7"
+      },
+      {
+        "id": "proof_id_seq_2_same_hash",
+        "current_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sequence_id": 2,
+        "raw_input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:2",
+        "proof_id": "67a259725e511dbbd2ae2de7a4c4244448ebcc88b38e8bb88669eb1e07b25f03",
+        "note": "Same hash different sequence → different proof_id"
+      },
+      {
+        "id": "proof_id_different_hash",
+        "current_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "sequence_id": 1,
+        "raw_input": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:1",
+        "proof_id": "eccab807fd9eaf76e50cb55783013de5c85582022e61132fb4ef94ef94778cae",
+        "note": "Different hash same sequence → different proof_id"
+      }
+    ]
+  },
+  "proof_id_formula": {
+    "_comment": "proof_id encoding — must match across Python, TypeScript, Go",
+    "formula": "sha256(f'{current_hash}:{sequence_id}'.encode('utf-8')).hexdigest()",
+    "encoding": "UTF-8, no BOM",
+    "separator": ":",
+    "sequence_id_format": "str(int) — no zero-padding, no floats",
+    "output": "lowercase hex, 64 chars",
+    "example": {
+      "current_hash": "b189dc8f0e01150b3c335e822047999422654c4e338ddcbde6d3b9faa644a454",
+      "sequence_id": 1,
+      "raw_string": "b189dc8f0e01150b3c335e822047999422654c4e338ddcbde6d3b9faa644a454:1",
+      "proof_id": "cef509088ea806b691dfce28ea8c2c1178047c7b2c4681d450fa2d5ee712e88f"
+    },
+    "cross_language_rule": "Python, TypeScript, Go must all produce identical proof_id for same inputs"
+  }
+}

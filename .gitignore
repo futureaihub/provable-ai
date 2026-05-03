@@ -1,76 +1,115 @@
 # ==========================
+# Secrets / Environment
+# ==========================
+.env
+venv/
+*.env
+*.env.*
+.envrc
+
+provable_key.hex
+zorynex_signing.key
+*.key
+*.pem
+*.p12
+*.hex
+
+# ==========================
+# Databases / Runtime State
+# ==========================
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.pid
+
+# ==========================
 # Python
 # ==========================
-
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 *.so
+*.dylib
+*$py.class
+.pytest_cache/
 
-# ==========================
-# Virtual Environments
-# ==========================
-
+.venv/
 venv/
-.env/
-.envrc
+env/
+ENV/
+
+.pytest_cache/
+.mypy_cache/
+.cache/
+.hypothesis/
+.tox/
+
+.coverage
+coverage.xml
+htmlcov/
+
+*.egg
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.whl
 
 # ==========================
-# SQLite Databases
+# Node / Frontend
 # ==========================
+node_modules/
+web/node_modules/
 
-*.db
-*.db-shm
-*.db-wal
+dist/
+build/
+web/dist/
+
+*.bundle.js
+*.bundle.js.map
+*.d.ts.map
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # ==========================
-# Logs
+# Backup Files
 # ==========================
+*.backup
+*.bak
+*_backup.py
+*_backup/
+provable-ai-backup/
 
+# ==========================
+# Logs / Reports
+# ==========================
 *.log
+logs/
+
+proof_*.json
+proof_export_*.json
+verification_report_*.txt
+*.pdf
 
 # ==========================
-# OS Files
+# IDE / OS Files
 # ==========================
+.vscode/
+.idea/
+.cursor/
+
+*.swp
+*.swo
+*~
 
 .DS_Store
 Thumbs.db
 
 # ==========================
-# Editor
+# Alembic
 # ==========================
-
-.vscode/
-.idea/
-
-# ==========================
-# Temporary Files
-# ==========================
-
-*.tmp
-*.bak
-
-# ==========================
-# Proof Artifacts
-# ==========================
-
-proof_*.json
-
-# ==========================
-# Build / Cache
-# ==========================
-
-.pytest_cache/
-.mypy_cache/
-.cache/
-
-# ==========================
-# Node (if UI later)
-# ==========================
-
-node_modules/
-dist/
-build/
-provable_key.hex
-zorynex_signing.key
+alembic/versions/*.pyc

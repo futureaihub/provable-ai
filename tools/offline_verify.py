@@ -1,36 +1,107 @@
+"""Zorynex offline proof verifier — standalone, no server needed."""
+from __future__ import annotations
+import json, hashlib
 
-import sys
-from tools.verify_core import verify_file
+
+def _recompute_hash(proof_dict: dict) -> str:
+    """Recompute canonical SHA-256 — must match engine.py exactly."""
+    ledger = proof_dict.get("ledger", {})
+    content = {
+        "decision":         proof_dict.get("decision", {}),
+        "decision_context": proof_dict.get("decision_context", {}),
+        "governance":       proof_dict.get("governance", {}),
+        "determinism":      proof_dict.get("determinism", {}),
+        "previous_hash":    ledger.get("previous_hash", ""),
+        "sequence_id":      ledger.get("sequence_id", 0),
+    }
+    canonical = json.dumps(content, sort_keys=True, separators=(",", ":"),
+                           ensure_ascii=False)
+    return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def verify_proof(path: str):
+def _compute_instance_root(ledger_entries: list) -> str:
+    combined = "".join(
+        e.get("ledger", {}).get("current_hash", "") for e in ledger_entries
+    )
+    return hashlib.sha256(combined.encode()).hexdigest()
+
+
+def _compute_package_hash(ledger_entries: list) -> str:
+    """SHA-256 of full ledger serialization — detects any structural modification."""
+    canonical = json.dumps(ledger_entries, sort_keys=True, separators=(",", ":"),
+                            ensure_ascii=False)
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def verify_proof(proof_file_path: str) -> tuple[bool, str, str | None]:
     """
-    Public interface used by cli.py.
-    Returns (valid: bool, message: str, final_state: str | None)
-    for backward compatibility with existing CLI contract.
+    Verify a proof package exported by Engine.export_proof().
+
+    Checks:
+    1. Package type and structure valid
+    2. package_hash: full ledger serialization unchanged
+    3. Per-proof hash: recomputed canonical hash matches stored hash
+    4. Chain linkage: previous_hash matches prior current_hash
+    5. Instance root: SHA-256 of all current_hashes matches stored root
+    6. Signature: Ed25519 over instance_root
+
+    Returns (valid, message, final_state).
     """
-    result = verify_file(path)
-    return result.valid, result.reason, result.final_state
+    try:
+        with open(proof_file_path) as f:
+            package = json.load(f)
+    except Exception as e:
+        return False, f"Cannot read proof file: {e}", None
 
+    if package.get("type") != "provable-ai-proof-package":
+        return False, f"Unknown type: {package.get('type')}", None
 
-# ============================================================
-# CLI ENTRY
-# ============================================================
+    proof_block   = package.get("proof", {})
+    ledger        = proof_block.get("ledger", [])
+    stored_root   = proof_block.get("instance_root", "")
+    stored_pkg_h  = package.get("package_hash", "")
+    sig_hex       = package.get("signature", "")
+    pub_key_hex   = package.get("public_key", "")
 
-if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python offline_verify.py proof.json")
-        sys.exit(1)
+    if not ledger:
+        return True, "No transitions", None
 
-    result = verify_file(sys.argv[1])
+    # --- Check 1: package_hash covers full ledger structure ---
+    if stored_pkg_h:
+        computed_pkg_h = _compute_package_hash(ledger)
+        if computed_pkg_h != stored_pkg_h:
+            return False, (
+                f"Package hash mismatch: ledger was modified after export. "
+                f"stored={stored_pkg_h[:16]}... computed={computed_pkg_h[:16]}..."
+            ), None
 
-    if result.valid:
-        print(f"VALID: {result.reason}")
-        if result.final_state:
-            print(f"Final state: {result.final_state}")
-        if result.instance_id:
-            print(f"Instance:    {result.instance_id}")
-        sys.exit(0)
-    else:
-        print(f"INVALID: {result.reason}")
-        sys.exit(1)
+    # --- Check 2: per-proof canonical hash integrity ---
+    prev_hash = None
+    for entry in ledger:
+        stored_hash = entry.get("ledger", {}).get("current_hash", "")
+        computed    = _recompute_hash(entry)
+        if computed != stored_hash:
+            return False, (
+                f"Hash mismatch at seq {entry.get('ledger',{}).get('sequence_id')}"
+            ), None
+        chain_prev = entry.get("ledger", {}).get("previous_hash", "")
+        if prev_hash is not None and chain_prev != prev_hash:
+            return False, "Chain broken: previous_hash mismatch", None
+        prev_hash = stored_hash
+
+    # --- Check 3: instance root ---
+    computed_root = _compute_instance_root(ledger)
+    if stored_root and computed_root != stored_root:
+        return False, "Instance root mismatch", None
+
+    # --- Check 4: Ed25519 signature ---
+    if sig_hex and pub_key_hex:
+        try:
+            from nacl.signing import VerifyKey
+            vk = VerifyKey(bytes.fromhex(pub_key_hex))
+            vk.verify(bytes.fromhex(computed_root), bytes.fromhex(sig_hex))
+        except Exception as e:
+            return False, f"Signature invalid: {e}", None
+
+    final_state = ledger[-1].get("decision", {}).get("to_state")
+    return True, "Proof valid", final_state

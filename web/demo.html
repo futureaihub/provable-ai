@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- CSP: 'self' allows module imports from same origin -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'none'; object-src 'none'; img-src 'none'; frame-src 'none';">
+<title>Zorynex — Proof Verifier</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #08090a;
+    --surface:  #0c0e10;
+    --s2:       #111417;
+    --border:   #1a2028;
+    --border2:  #222a34;
+    --text:     #e8f0f8;
+    --dim:      #5a6a7e;
+    --muted:    #2a3848;
+    --accent:   #00d4aa;
+    --adim:     #00d4aa14;
+    --red:      #ff4757;
+    --rdim:     #ff475714;
+    --yellow:   #ffd32a;
+    --mono:     'IBM Plex Mono', monospace;
+    --sans:     'IBM Plex Sans', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 14px; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 0 24px 110px;
+    position: relative; overflow-x: hidden;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background-image: linear-gradient(var(--border) 1px, transparent 1px),
+                      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 48px 48px; opacity: .28; pointer-events: none; z-index: 0;
+  }
+  body::after {
+    content: ''; position: fixed; inset: 0;
+    background: radial-gradient(ellipse 65% 65% at 50% 38%, transparent 28%, var(--bg) 78%);
+    pointer-events: none; z-index: 0;
+  }
+  header, .drop-zone, #verifying, #result, .reset-row, footer { position: relative; z-index: 1; }
+
+  header {
+    width: 100%; max-width: 720px;
+    padding: 44px 0 36px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 40px;
+  }
+  .logo-row { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .logo-name { font-size: 15px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: #fff; }
+  .logo-ver  { font-size: 10px; color: var(--dim); letter-spacing: .08em; margin-left: auto; }
+  .tagline   { font-family: var(--sans); font-size: 13px; color: #b8c8d8; line-height: 1.65; }
+  .tagline strong { color: var(--accent); font-weight: 500; }
+
+  .drop-zone {
+    width: 100%; max-width: 720px;
+    border: 1px dashed var(--border2); border-radius: 3px;
+    padding: 56px 32px; text-align: center; cursor: pointer;
+    background: var(--surface); margin-bottom: 24px;
+    transition: border-color .15s, background .15s;
+  }
+  .drop-zone:hover, .drop-zone.over { border-color: var(--accent); background: var(--adim); }
+  .drop-zone:hover .drop-icon-wrap, .drop-zone.over .drop-icon-wrap { opacity: 1; }
+  .drop-icon-wrap { opacity: .45; transition: opacity .15s; margin-bottom: 20px; }
+  .drop-title { font-size: 13px; font-weight: 600; color: #fff; letter-spacing: .07em; text-transform: uppercase; margin-bottom: 8px; }
+  .drop-sub   { font-family: var(--sans); font-size: 12px; color: var(--dim); margin-bottom: 22px; }
+  .upload-btn {
+    display: inline-block; padding: 9px 24px;
+    border: 1px solid var(--accent); font-family: var(--mono);
+    font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--accent); cursor: pointer; background: transparent;
+    transition: background .15s, color .15s;
+  }
+  .upload-btn:hover { background: var(--accent); color: var(--bg); }
+  #file-input { display: none; }
+  .drop-hint { margin-top: 18px; font-size: 10px; color: var(--muted); font-family: var(--sans); }
+
+  #verifying {
+    display: none; align-items: center; gap: 12px;
+    width: 100%; max-width: 720px;
+    padding: 20px 24px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 3px;
+    margin-bottom: 24px; font-size: 12px; color: #b8c8d8;
+  }
+  .spinner {
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--border2); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin .65s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #result { display: none; width: 100%; max-width: 720px; margin-bottom: 24px; }
+
+  .verdict {
+    padding: 22px 28px; display: flex; align-items: center; gap: 16px;
+    border-radius: 3px 3px 0 0; border: 1px solid;
+  }
+  .verdict.valid   { background: #001410; border-color: #00d4aa30; }
+  .verdict.invalid { background: #110006; border-color: #ff475730; }
+  .verdict.tamper  { background: #110a00; border-color: #ffd32a30; }
+
+  .v-icon { font-size: 22px; flex-shrink: 0; }
+  .v-label { font-size: 16px; font-weight: 600; letter-spacing: .07em; }
+  .verdict.valid   .v-label { color: var(--accent); }
+  .verdict.invalid .v-label { color: var(--red); }
+  .verdict.tamper  .v-label { color: var(--yellow); }
+  .v-code  { font-size: 10px; color: var(--dim); font-weight: 400; letter-spacing: .08em; margin-top: 2px; }
+  .v-file  { font-family: var(--sans); font-size: 12px; color: var(--dim); margin-top: 3px; }
+
+  .crypto-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .badge {
+    font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    padding: 3px 10px; border-radius: 2px;
+  }
+  .badge.green { background: #001a12; color: var(--accent); border: 1px solid #00d4aa25; }
+  .badge.red   { background: #130004; color: var(--red);    border: 1px solid #ff475725; }
+  .badge.grey  { background: transparent; color: var(--dim); border: 1px solid var(--border2); }
+
+  .result-body {
+    background: var(--surface); border: 1px solid var(--border);
+    border-top: none; border-radius: 0 0 3px 3px; overflow: hidden;
+  }
+
+  .steps-section { padding: 20px 28px; border-bottom: 1px solid var(--border); }
+  .sec-label { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin-bottom: 14px; font-weight: 500; }
+  .steps-grid { display: flex; flex-direction: column; gap: 9px; }
+  .step-row { display: flex; align-items: flex-start; gap: 11px; font-size: 12px; }
+  .step-ico {
+    width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 1px;
+  }
+  .step-ico.pass { background: #001a12; color: var(--accent); border: 1px solid #00d4aa25; }
+  .step-ico.fail { background: #130004; color: var(--red);    border: 1px solid #ff475725; }
+  .step-ico.skip { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .step-txt { flex: 1; }
+  .step-name   { font-weight: 500; color: #d0dce8; display: block; margin-bottom: 2px; }
+  .step-detail { font-size: 11px; color: var(--dim); font-family: var(--sans); font-weight: 400; }
+  .step-code   { font-size: 9px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-left: auto; flex-shrink: 0; align-self: center; }
+
+  .meta-grid { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border); }
+  .meta-cell { padding: 14px 28px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .meta-cell:nth-child(even) { border-right: none; }
+  .meta-cell:nth-last-child(-n+2) { border-bottom: none; }
+  .meta-lbl { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; font-weight: 500; }
+  .meta-val { font-size: 12px; font-weight: 500; color: #e0eaf4; word-break: break-all; line-height: 1.4; }
+  .meta-val.accent { color: var(--accent); }
+  .meta-val.red    { color: var(--red); }
+  .meta-val.hash   { font-size: 10px; color: var(--dim); font-weight: 400; }
+
+  .scope-section { padding: 14px 28px; border-bottom: 1px solid var(--border); }
+  .scope-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .scope-pill { font-size: 10px; padding: 2px 9px; border-radius: 2px; border: 1px solid var(--border2); color: var(--dim); font-weight: 400; }
+
+  .gov-section { padding: 14px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .gov-tag  { font-size: 10px; padding: 3px 9px; border-radius: 2px; background: var(--s2); border: 1px solid var(--border2); color: var(--dim); }
+  .gov-note { margin-left: auto; font-size: 9px; color: var(--muted); font-style: italic; font-family: var(--sans); }
+
+  .fail-section { padding: 20px 28px; border-bottom: 1px solid var(--border); }
+  .fail-code    { font-size: 10px; color: var(--dim); letter-spacing: .1em; margin-bottom: 6px; font-weight: 500; }
+  .fail-type    { font-size: 13px; font-weight: 600; color: var(--red); margin-bottom: 8px; }
+  .fail-msg     { font-family: var(--sans); font-size: 12px; color: #b0bccc; line-height: 1.65; }
+
+  .replay-note  { padding: 12px 28px; border-bottom: 1px solid var(--border); font-family: var(--sans); font-size: 11px; color: var(--dim); display: flex; align-items: center; gap: 8px; }
+  .replay-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: .06em; }
+
+  .env-section { padding: 12px 28px; border-bottom: 1px solid var(--border); display: flex; gap: 24px; flex-wrap: wrap; }
+  .env-item { font-size: 10px; color: var(--muted); font-family: var(--sans); }
+  .env-item strong { color: var(--dim); font-family: var(--mono); font-weight: 500; }
+
+  .export-section { padding: 14px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .export-btn {
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase;
+    padding: 7px 16px; border: 1px solid var(--border2);
+    color: var(--dim); background: transparent; cursor: pointer;
+    transition: border-color .15s, color .15s;
+  }
+  .export-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .trust-note { padding: 14px 28px; display: flex; align-items: flex-start; gap: 10px; font-family: var(--sans); font-size: 11px; color: var(--dim); line-height: 1.6; }
+  .trust-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; margin-top: 3px; }
+
+  .antitamper { padding: 10px 28px; background: #0a0c0d; border-top: 1px solid var(--border); }
+  .antitamper p { font-size: 9px; color: var(--muted); font-family: var(--sans); letter-spacing: .03em; }
+
+  .reset-row { width: 100%; max-width: 720px; display: flex; justify-content: space-between; align-items: center; }
+  .reset-btn { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); background: none; border: none; cursor: pointer; transition: color .15s; }
+  .reset-btn:hover { color: #c0ccd8; }
+  .offline-badge { font-size: 10px; color: var(--muted); font-family: var(--sans); }
+  .offline-badge span { color: var(--accent); font-family: var(--mono); }
+
+  footer {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    padding: 11px 28px; background: rgba(8,9,10,.96);
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 10px; color: var(--muted); letter-spacing: .06em;
+    z-index: 10; backdrop-filter: blur(8px);
+  }
+  .footer-logo { display: flex; align-items: center; gap: 10px; }
+  .footer-right { display: flex; gap: 24px; }
+  footer a { color: var(--muted); text-decoration: none; transition: color .15s; }
+  footer a:hover { color: var(--dim); }
+
+  @media (max-width: 500px) {
+    .meta-grid { grid-template-columns: 1fr; }
+    .meta-cell { border-right: none; }
+    .meta-cell:nth-last-child(-n+2) { border-bottom: 1px solid var(--border); }
+    .meta-cell:last-child { border-bottom: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-row">
+    <svg width="34" height="34" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100" height="100" rx="14" fill="#0c0e10"/>
+      <line x1="18" y1="24" x2="82" y2="24" stroke="#00e5a0" stroke-width="9" stroke-linecap="round"/>
+      <line x1="82" y1="24" x2="18" y2="70" stroke="#00e5a0" stroke-width="9" stroke-linecap="round"/>
+      <line x1="18" y1="70" x2="68" y2="70" stroke="#00e5a0" stroke-width="9" stroke-linecap="round"/>
+      <circle cx="72" cy="82" r="18" fill="#0c0e10"/>
+      <circle cx="72" cy="82" r="15" fill="#0c0e10" stroke="#00e5a0" stroke-width="2.5"/>
+      <polyline points="64,82 70,89 81,73" fill="none" stroke="#00e5a0" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span class="logo-name">Zorynex</span>
+    <span class="logo-ver">Proof Verifier · v1.0 · offline</span>
+  </div>
+  <p class="tagline">
+    Drop a <strong>proof.json</strong> file. Verification runs entirely in your browser —
+    <strong>no server, no network, no trust required</strong>.
+    The public key is embedded in every proof.
+  </p>
+</header>
+
+<div class="drop-zone" id="drop-zone">
+  <div class="drop-icon-wrap">
+    <svg width="44" height="44" viewBox="0 0 48 48" fill="none">
+      <rect x="8" y="4" width="28" height="36" rx="3" stroke="#00d4aa" stroke-width="1.5" fill="none"/>
+      <line x1="14" y1="16" x2="30" y2="16" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="14" y1="22" x2="30" y2="22" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="14" y1="28" x2="24" y2="28" stroke="#00d4aa" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="36" cy="36" r="10" fill="#0c0e10" stroke="#00d4aa" stroke-width="1.5"/>
+      <polyline points="31,36 35,41 42,29" fill="none" stroke="#00d4aa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+  <div class="drop-title">Drop proof.json here</div>
+  <div class="drop-sub">Single proof or chain array · JSON only</div>
+  <button class="upload-btn" onclick="document.getElementById('file-input').click()">Upload Proof</button>
+  <input type="file" id="file-input" accept=".json,application/json">
+  <div class="drop-hint">Your file never leaves this browser tab · verification is purely local</div>
+</div>
+
+<div id="verifying">
+  <div class="spinner"></div>
+  <span id="vstep">Parsing proof structure...</span>
+</div>
+
+<div id="result"></div>
+
+<div class="reset-row" id="reset-row" style="display:none">
+  <button class="reset-btn" onclick="resetUI()">↩ verify another proof</button>
+  <span class="offline-badge">verified <span>offline</span> · no data transmitted</span>
+</div>
+
+<footer>
+  <div class="footer-logo">
+    <svg width="18" height="18" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100" height="100" rx="14" fill="#0c0e10"/>
+      <line x1="18" y1="24" x2="82" y2="24" stroke="#00e5a0" stroke-width="9" stroke-linecap="round"/>
+      <line x1="82" y1="24" x2="18" y2="70" stroke="#00e5a0" stroke-width="9" stroke-linecap="round"/>
+      <line x1="18" y1="70" x2="68" y2="70" stroke="#00e5a0" stroke-width="9" stroke-linecap="round"/>
+      <circle cx="72" cy="82" r="18" fill="#0c0e10"/>
+      <circle cx="72" cy="82" r="15" fill="#0c0e10" stroke="#00e5a0" stroke-width="2.5"/>
+      <polyline points="64,82 70,89 81,73" fill="none" stroke="#00e5a0" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>Zorynex · zorynex-proof-v1 · SHA-256 · Ed25519</span>
+  </div>
+  <div class="footer-right">
+    <a href="https://zorynex.co">zorynex.co</a>
+    <a href="https://github.com/futureaihub/provable-ai">github</a>
+  </div>
+</footer>
+
+<script>
+"use strict";
+// ═══════════════════════════════════════════════════════════════════════
+// ZORYNEX PROOF VERIFIER — v1.0
+// No external dependencies. 100% offline. WebCrypto only.
+// Matches Python verifier canonical JSON exactly.
+//
+// Error codes:
+//   E001 — SchemaValidationError
+//   E002 — HashMismatch
+//   E003 — SignatureMismatch
+//   E004 — ChainBroken
+//   E005 — SequenceGap
+//   E006 — ProofIdMismatch
+//   E007 — DeterminismViolation
+//   E008 — InvalidEncoding
+//   E009 — ParseError
+//   E010 — UnexpectedError
+// ═══════════════════════════════════════════════════════════════════════
+
+const VERIFIER_VERSION = "v1.0";
+const HASH_ALGO        = "SHA-256";
+const SIG_ALGO         = "Ed25519";
+const GENESIS          = "0".repeat(64);
+
+// deep freeze — prevent mutation after parse
+function deepFreeze(obj) {
+  if (obj === null || typeof obj !== "object") return obj;
+  Object.freeze(obj);
+  Object.getOwnPropertyNames(obj).forEach(k => {
+    const v = obj[k];
+    if (v && typeof v === "object" && !Object.isFrozen(v)) deepFreeze(v);
+  });
+  return obj;
+}
+
+// Canonical JSON — matches Python json.dumps(sort_keys=True, separators=(",",":"), ensure_ascii=False)
+function cj(v) {
+  if (v === null || v === undefined) return "null";
+  if (typeof v === "boolean") return v ? "true" : "false";
+  if (typeof v === "number") {
+    if (!Number.isFinite(v)) throw new Error(`Non-finite number in canonical payload: ${v}`);
+    if (Object.is(v, -0)) throw new Error("Negative zero not allowed in canonical payload");
+    if (!Number.isInteger(v)) throw new Error(`Float ${v} not allowed — use string or integer`);
+    return String(v);
+  }
+  if (typeof v === "string") {
+    return JSON.stringify(v).replace(/\\u([0-9a-fA-F]{4})/g,
+      (_, h) => String.fromCodePoint(parseInt(h, 16)));
+  }
+  if (Array.isArray(v)) return "[" + v.map(cj).join(",") + "]";
+  if (typeof v === "object") {
+    return "{" + Object.keys(v).sort().map(k => cj(k) + ":" + cj(v[k])).join(",") + "}";
+  }
+  throw new Error(`Unsupported type: ${typeof v}`);
+}
+
+// Golden vector self-test
+const GOLDEN_CANONICAL = '{"a":1,"b":{"x":"José","y":true},"c":null}';
+const GOLDEN_INPUT = { b: { y: true, x: "José" }, a: 1, c: null };
+(function() {
+  try {
+    const got = cj(GOLDEN_INPUT);
+    if (got !== GOLDEN_CANONICAL) console.error("CRITICAL: canonicalJson golden vector mismatch!", { expected: GOLDEN_CANONICAL, got });
+  } catch(e) { console.error("CRITICAL: canonicalJson self-test failed:", e); }
+})();
+
+async function sha256(data) {
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
+}
+async function sha256str(s) { return sha256(new TextEncoder().encode(s)); }
+
+function hexBytes(h) {
+  const b = new Uint8Array(h.length / 2);
+  for (let i = 0; i < h.length; i += 2) b[i/2] = parseInt(h.slice(i, i+2), 16);
+  return b;
+}
+
+function requireLowercaseHex(s, fieldName, expectedLen) {
+  if (typeof s !== "string") return `${fieldName} must be a string`;
+  if (s !== s.toLowerCase()) return `${fieldName} must be lowercase hex (E008)`;
+  if (s !== s.trim()) return `${fieldName} must not have leading/trailing whitespace (E008)`;
+  if (expectedLen !== undefined && s.length !== expectedLen) return `${fieldName} must be ${expectedLen} chars, got ${s.length}`;
+  if (!/^[0-9a-f]+$/.test(s)) return `${fieldName} is not valid hex`;
+  return null;
+}
+
+async function verifyEd25519(pubHex, msgBytes, sigHex) {
+  try {
+    const key = await crypto.subtle.importKey(
+      "raw", hexBytes(pubHex), { name: "Ed25519" }, false, ["verify"]);
+    return await crypto.subtle.verify("Ed25519", key, hexBytes(sigHex), msgBytes);
+  } catch(e) {
+    throw new Error(`Ed25519 not available in this browser's WebCrypto. Use Chrome 112+ or Firefox 119+. Details: ${e.message}`);
+  }
+}
+
+function buildHashPayload(p) {
+  return {
+    decision:         p.decision,
+    decision_context: p.decision_context,
+    governance:       p.governance,
+    determinism:      p.determinism,
+    previous_hash:    p.ledger.previous_hash,
+    sequence_id:      p.ledger.sequence_id,
+  };
+}
+
+async function computeProofId(currentHash, sequenceId) {
+  return sha256str(`${currentHash}:${sequenceId}`);
+}
+
+const ALLOWED_TOP = new Set([
+  "type","instance_id","decision","decision_context",
+  "governance","determinism","ledger","signature","proof_id"
+]);
+
+function validateStructure(p) {
+  if (!p || typeof p !== "object" || Array.isArray(p)) return ["E001", "Proof must be a JSON object"];
+  for (const k of Object.keys(p)) {
+    if (!ALLOWED_TOP.has(k)) return ["E001", `Unknown top-level field: "${k}". Unknown fields may cause hash instability.`];
+  }
+  for (const f of ["type","instance_id","decision","decision_context","governance","determinism","ledger","signature"]) {
+    if (!(f in p)) return ["E001", `Missing required field: "${f}"`];
+  }
+  if (p.type !== "zorynex-proof-v1") return ["E001", `Expected type "zorynex-proof-v1", got "${p.type}"`];
+
+  const l = p.ledger, s = p.signature;
+  if (!l || typeof l !== "object") return ["E001", "ledger must be an object"];
+  for (const f of ["sequence_id","previous_hash","current_hash","timestamp"]) {
+    if (!(f in l)) return ["E001", `Missing ledger field: "${f}"`];
+  }
+  if (!s || typeof s !== "object") return ["E001", "signature must be an object"];
+  for (const f of ["algorithm","key_id","public_key","value"]) {
+    if (!(f in s)) return ["E001", `Missing signature field: "${f}"`];
+  }
+  let err;
+  err = requireLowercaseHex(s.public_key, "signature.public_key", 64); if (err) return ["E008", err];
+  err = requireLowercaseHex(s.value, "signature.value", 128);          if (err) return ["E008", err];
+  err = requireLowercaseHex(l.current_hash, "ledger.current_hash", 64); if (err) return ["E008", err];
+  err = requireLowercaseHex(l.previous_hash, "ledger.previous_hash");   if (err) return ["E008", err];
+
+  if (typeof l.sequence_id !== "number" || !Number.isInteger(l.sequence_id) || l.sequence_id < 1) {
+    return ["E001", "ledger.sequence_id must be integer >= 1"];
+  }
+  const d = p.determinism;
+  if (!d || typeof d !== "object" || !d.mode) return ["E001", "determinism.mode is required"];
+  if (d.mode === "strict_deterministic" && d.seed !== null && d.seed !== undefined) {
+    return ["E007", "DeterminismViolation: seed must be null in strict_deterministic mode"];
+  }
+  return null;
+}
+
+const STEPS = [
+  { name: "Structure validation",   code: "E001" },
+  { name: "Hash verification",      code: "E002" },
+  { name: "Signature verification", code: "E003" },
+  { name: "Chain integrity",        code: "E004" },
+  { name: "Sequence check",         code: "E005" },
+  { name: "Proof ID check",         code: "E006" },
+];
+
+async function verifyProof(proof, prevHash, expSeq, cb) {
+  prevHash = prevHash || null;
+  expSeq   = expSeq   || null;
+  const steps = STEPS.map(s => ({ ...s, pass: null, detail: "" }));
+  const ts = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+
+  function markFailed(from) {
+    for (let i = from; i < steps.length; i++) {
+      if (steps[i].pass === null) { steps[i].pass = false; steps[i].detail = "Not reached — prior step failed"; }
+    }
+  }
+  function fail(code, type, msg, extra) {
+    return { valid:false, chain_intact:false, steps,
+      sequence_verified:0, final_state:null, key_id:null, verified_at:ts,
+      governance_recorded:null, governance_verified:false,
+      failure_reason:{ code, type, message:msg, ...extra } };
+  }
+
+  if (cb) cb("Validating proof structure...");
+  const se = validateStructure(proof);
+  steps[0].pass = !se;
+  if (se) { steps[0].detail = se[1]; markFailed(1); return fail(se[0], "SCHEMA VIOLATION", se[1]); }
+  steps[0].detail = "All required fields present · encoding valid";
+
+  const l = proof.ledger, s = proof.signature;
+  const seqId = l.sequence_id;
+  const stored = l.current_hash;
+  const keyId  = s.key_id;
+
+  if (cb) cb("Recomputing SHA-256 hash...");
+  let recomp;
+  try {
+    recomp = await sha256(new TextEncoder().encode(cj(buildHashPayload(proof))));
+  } catch(e) {
+    steps[1].pass = false; steps[1].detail = `Encoding error: ${e.message}`; markFailed(2);
+    return fail("E002", "HASH MISMATCH", `Canonical JSON encoding failed: ${e.message}`);
+  }
+  steps[1].pass = (recomp === stored);
+  if (!steps[1].pass) {
+    steps[1].detail = `Expected ${recomp.slice(0,16)}… stored ${stored.slice(0,16)}…`; markFailed(2);
+    return fail("E002", "TAMPER DETECTED", `Hash mismatch. Recomputed: ${recomp.slice(0,16)}… Stored: ${stored.slice(0,16)}… The proof payload was modified after signing.`, { expected:recomp, stored });
+  }
+  steps[1].detail = `SHA-256 verified · ${stored.slice(0,16)}…`;
+
+  if (cb) cb("Verifying Ed25519 signature...");
+  let sigOk = false;
+  try { sigOk = await verifyEd25519(s.public_key, hexBytes(stored), s.value); }
+  catch(e) { steps[2].pass = false; steps[2].detail = e.message; markFailed(3); return fail("E003", "SIGNATURE INVALID", e.message); }
+  steps[2].pass = sigOk;
+  if (!sigOk) {
+    steps[2].detail = `Invalid for key ${keyId}`; markFailed(3);
+    return fail("E003", "SIGNATURE INVALID", `Ed25519 signature does not verify against embedded public key for key '${keyId}'.`, { key_id:keyId });
+  }
+  steps[2].detail = `Ed25519 · key ${keyId}`;
+
+  if (cb) cb("Checking hash chain integrity...");
+  const prev = l.previous_hash;
+  if (prevHash !== null) {
+    steps[3].pass = (prev === prevHash);
+    steps[3].detail = steps[3].pass ? "previous_hash links correctly" : `Expected ${prevHash.slice(0,16)}… got ${prev.slice(0,16)}…`;
+    if (!steps[3].pass) { markFailed(4); return fail("E004", "CHAIN BROKEN", `Hash chain broken at sequence_id=${seqId}.`, { expected:prevHash, stored:prev }); }
+  } else if (seqId === 1) {
+    steps[3].pass = (prev === GENESIS);
+    steps[3].detail = steps[3].pass ? "Genesis hash verified (first proof)" : "First proof must use genesis hash (64 zeros)";
+    if (!steps[3].pass) { markFailed(4); return fail("E004", "CHAIN BROKEN", `First proof must have genesis hash as previous_hash.`, { expected:GENESIS, stored:prev }); }
+  } else {
+    steps[3].pass = true; steps[3].detail = "Standalone proof — chain context not provided";
+  }
+
+  if (cb) cb("Validating sequence order...");
+  if (expSeq !== null && seqId !== expSeq) {
+    steps[4].pass = false; steps[4].detail = `Expected seq=${expSeq}, got ${seqId}`; markFailed(5);
+    return fail("E005", "SEQUENCE GAP", `Expected sequence_id=${expSeq}, got ${seqId}.`, { expected:String(expSeq), stored:String(seqId) });
+  }
+  steps[4].pass = true; steps[4].detail = `sequence_id=${seqId} · order correct`;
+
+  if (cb) cb("Checking proof identity...");
+  if (proof.proof_id !== undefined) {
+    const pidErr = requireLowercaseHex(proof.proof_id, "proof_id", 64);
+    if (pidErr) { steps[5].pass = false; steps[5].detail = pidErr; return fail("E006", "PROOF ID INVALID", pidErr); }
+    const expId = await computeProofId(stored, seqId);
+    steps[5].pass = (proof.proof_id === expId);
+    steps[5].detail = steps[5].pass ? `SHA-256(hash:seq) = ${expId.slice(0,16)}…` : `Expected ${expId.slice(0,16)}… got ${proof.proof_id.slice(0,16)}…`;
+    if (!steps[5].pass) return fail("E006", "PROOF ID MISMATCH", `proof_id does not match SHA-256(current_hash:sequence_id). Expected: ${expId.slice(0,16)}…`, { expected:expId, stored:proof.proof_id });
+  } else {
+    steps[5].pass = true; steps[5].detail = "proof_id not present — skipped";
+  }
+
+  const g = proof.governance, d = proof.determinism;
+  return {
+    valid:true, chain_intact:true, steps,
+    sequence_verified: seqId,
+    final_state:  proof.decision.to_state,
+    from_state:   proof.decision.from_state,
+    key_id:       keyId,
+    verified_at:  ts,
+    hash_prefix:  stored.slice(0,16),
+    prev_prefix:  prev.slice(0,16),
+    instance_id:  proof.instance_id,
+    proof_id:     proof.proof_id || null,
+    governance_recorded: {
+      model_version:    g.model_version,
+      agent_version:    g.agent_version,
+      policy_version:   g.policy_version,
+      determinism_mode: d.mode,
+    },
+    governance_verified: false,
+    replay_executed: false,
+    verification_scope: ["structure","hash","signature","chain","sequence","proof_id"],
+    verifier_version: VERIFIER_VERSION,
+    failure_reason: null,
+  };
+}
+
+async function verifyChain(proofs, cb) {
+  let lastHash = GENESIS, lastResult = null, lastValidSeq = 0;
+  const allSteps = [];
+  for (let i = 0; i < proofs.length; i++) {
+    if (cb) cb(`Verifying proof ${i+1} of ${proofs.length}...`);
+    const r = await verifyProof(proofs[i], lastHash, i + 1, null);
+    if (r.steps) allSteps.push(...r.steps.map(s => ({ ...s, seq: i+1 })));
+    if (!r.valid) { r.steps = allSteps; r.sequence_verified = lastValidSeq; return r; }
+    lastValidSeq = i + 1;
+    lastHash = proofs[i].ledger.current_hash;
+    lastResult = r;
+  }
+  lastResult.steps = allSteps;
+  lastResult.sequence_verified = proofs.length;
+  return lastResult;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// UI
+// ═══════════════════════════════════════════════════════════════════════
+
+const $drop   = document.getElementById("drop-zone");
+const $input  = document.getElementById("file-input");
+const $ver    = document.getElementById("verifying");
+const $vstep  = document.getElementById("vstep");
+const $result = document.getElementById("result");
+const $reset  = document.getElementById("reset-row");
+
+let verifyingLock = false;
+let lastVerifyResult = null;
+
+$drop.addEventListener("dragover", e => { e.preventDefault(); $drop.classList.add("over"); });
+$drop.addEventListener("dragleave", () => $drop.classList.remove("over"));
+$drop.addEventListener("drop", e => { e.preventDefault(); $drop.classList.remove("over"); if (e.dataTransfer.files[0]) go(e.dataTransfer.files[0]); });
+$drop.addEventListener("click", e => { if (e.target.tagName !== "BUTTON") $input.click(); });
+$input.addEventListener("change", () => { if ($input.files[0]) go($input.files[0]); });
+
+async function go(file) {
+  if (verifyingLock) return;
+  verifyingLock = true;
+  $drop.style.display = "none"; $ver.style.display = "flex";
+  $result.style.display = "none"; $reset.style.display = "none";
+  lastVerifyResult = null;
+
+  let parsed, isChain = false;
+  try {
+    $vstep.textContent = "Reading file...";
+    const text = await file.text();
+    $vstep.textContent = "Parsing JSON...";
+    parsed = JSON.parse(text);
+  } catch(e) {
+    render(null, errResult("E009","PARSE ERROR",`Invalid JSON: ${e.message}`), file.name, false);
+    verifyingLock = false; return;
+  }
+
+  if (Array.isArray(parsed)) {
+    if (parsed.length === 0) { render(null, errResult("E009","EMPTY CHAIN","No proofs provided."), file.name, false); verifyingLock = false; return; }
+    if (parsed.length > 1000) { render(null, errResult("E009","CHAIN TOO LARGE",`${parsed.length} proofs — max 1000.`), file.name, false); verifyingLock = false; return; }
+    isChain = parsed.length > 1;
+  }
+
+  deepFreeze(parsed);
+
+  let r;
+  try {
+    // Use window.verifyProofExternal / window.verifyChainExternal if available
+    // (connected to compiled dist/verifier.js via module bridge below)
+    // Falls back to inline implementation if module not loaded
+    if (Array.isArray(parsed)) {
+      r = typeof window.verifyChainExternal === "function"
+        ? await window.verifyChainExternal(parsed)
+        : await verifyChain(parsed, t => $vstep.textContent = t);
+    } else {
+      r = typeof window.verifyProofExternal === "function"
+        ? await window.verifyProofExternal(parsed)
+        : await verifyProof(parsed, null, null, t => $vstep.textContent = t);
+    }
+  } catch(e) {
+    r = errResult("E010","UNEXPECTED ERROR", String(e));
+  }
+
+  render(parsed, r, file.name, isChain);
+  verifyingLock = false;
+}
+
+function errResult(code, type, message) {
+  return { valid:false, chain_intact:false, steps:[],
+    sequence_verified:0, final_state:null, key_id:null,
+    verified_at: new Date().toISOString().replace(/\.\d{3}Z$/,"Z"),
+    governance_recorded:null, governance_verified:false,
+    failure_reason:{ code, type, message }
+  };
+}
+
+function render(parsed, r, filename, isChain) {
+  $ver.style.display    = "none";
+  $result.style.display = "block";
+  $reset.style.display  = "flex";
+  lastVerifyResult = r;
+
+  const v = r.valid, fr = r.failure_reason, gov = r.governance_recorded;
+  let vClass = v ? "valid" : "invalid";
+  if (!v && fr && ["TAMPER DETECTED","CHAIN BROKEN","SIGNATURE INVALID"].includes(fr.type)) vClass = "tamper";
+
+  const badges = v
+    ? `<div class="crypto-badges">
+        <span class="badge green">✓ Cryptographically Verified</span>
+        <span class="badge green">✓ Chain Intact</span>
+        <span class="badge green">✓ Signature Valid</span>
+        <span class="badge grey">SHA-256 · Ed25519</span>
+       </div>`
+    : `<div class="crypto-badges">
+        <span class="badge red">✗ ${esc(fr ? fr.type : "INVALID")}</span>
+        ${fr && fr.code ? `<span class="badge grey">${esc(fr.code)}</span>` : ""}
+       </div>`;
+
+  const stepsHtml = (r.steps || []).map(s => {
+    const cls = s.pass === true ? "pass" : s.pass === false ? "fail" : "skip";
+    const ico = s.pass === true ? "✓" : s.pass === false ? "✗" : "–";
+    const lbl = s.seq ? `${s.name} · proof #${s.seq}` : s.name;
+    return `<div class="step-row">
+      <div class="step-ico ${cls}">${ico}</div>
+      <div class="step-txt">
+        <span class="step-name">${esc(lbl)}</span>
+        <span class="step-detail">${esc(s.detail || "")}</span>
+      </div>
+      <span class="step-code">${esc(s.code || "")}</span>
+    </div>`;
+  }).join("");
+
+  const meta = [];
+  if (v) {
+    meta.push(["Final State", r.final_state||"—", "accent"]);
+    meta.push(["From State",  r.from_state||"—",  ""]);
+    meta.push(["Instance ID", r.instance_id||"—", ""]);
+    meta.push(["Sequence ID", String(r.sequence_verified), ""]);
+    meta.push(["Proof ID",    r.proof_id ? r.proof_id.slice(0,16)+"…" : "not present", "hash"]);
+    meta.push(["Key ID",      r.key_id||"—", ""]);
+    meta.push(["Hash Prefix", (r.hash_prefix||"—")+"…", "hash"]);
+    meta.push(["Prev Hash",   (r.prev_prefix||"—")+"…", "hash"]);
+    meta.push(["Chain",       isChain ? `${r.sequence_verified} proofs verified` : "Single proof", "accent"]);
+    meta.push(["Verified At", r.verified_at, "hash"]);
+  } else {
+    if (r.sequence_verified > 0) meta.push(["Verified Up To", `seq=${r.sequence_verified}`, "accent"]);
+    if (r.key_id)      meta.push(["Key ID",  r.key_id, ""]);
+    if (r.final_state) meta.push(["State",   r.final_state, ""]);
+    meta.push(["Chain",      r.chain_intact ? "Intact" : "Broken", r.chain_intact ? "accent" : "red"]);
+    meta.push(["Checked At", r.verified_at, "hash"]);
+  }
+
+  const metaHtml = meta.map(([l,val,cls]) =>
+    `<div class="meta-cell"><div class="meta-lbl">${esc(l)}</div><div class="meta-val ${cls}">${esc(val)}</div></div>`).join("");
+
+  const govHtml = gov ? `<div class="gov-section">
+    <span class="meta-lbl" style="margin-bottom:0">Governance recorded</span>
+    <span class="gov-tag">${esc(gov.model_version)}</span>
+    <span class="gov-tag">${esc(gov.policy_version)}</span>
+    <span class="gov-tag">${esc(gov.determinism_mode)}</span>
+    <span class="gov-note">governance_verified: false — record proven, not correctness</span>
+  </div>` : "";
+
+  const failHtml = (!v && fr) ? `<div class="fail-section">
+    <div class="fail-code">${esc(fr.code||"")} — ${esc(fr.type||"")}</div>
+    <div class="fail-type">${esc(fr.type||"")}</div>
+    <div class="fail-msg">${esc(fr.message||"")}</div>
+  </div>` : "";
+
+  const scopeItems = (r.verification_scope||["structure","hash","signature","chain","sequence","proof_id"])
+    .map(s => `<span class="scope-pill">${esc(s)}</span>`).join("");
+
+  $result.innerHTML = `
+    <div class="verdict ${vClass}">
+      <div class="v-icon">${v ? "✓" : "✗"}</div>
+      <div style="flex:1">
+        <div class="v-label">${v ? "VALID" : esc(fr ? fr.type : "INVALID")}</div>
+        <div class="v-code">${fr && fr.code ? esc(fr.code)+" · " : ""}${v ? "All verification checks passed" : "Verification failed"}</div>
+        <div class="v-file">${esc(filename)}${isChain ? ` · chain of ${r.sequence_verified}` : ""}</div>
+        ${badges}
+      </div>
+    </div>
+    <div class="result-body">
+      ${stepsHtml ? `<div class="steps-section"><div class="sec-label">Verification steps</div><div class="steps-grid">${stepsHtml}</div></div>` : ""}
+      <div class="meta-grid">${metaHtml}</div>
+      ${govHtml}${failHtml}
+      <div class="scope-section"><div class="meta-lbl">Verification scope</div><div class="scope-pills">${scopeItems}</div></div>
+      <div class="replay-note"><span class="replay-label">REPLAY</span>NOT EXECUTED (by design — Phase 4)</div>
+      <div class="env-section">
+        <span class="env-item"><strong>Verifier</strong> ${esc(VERIFIER_VERSION)}</span>
+        <span class="env-item"><strong>Hash Algo</strong> ${esc(HASH_ALGO)}</span>
+        <span class="env-item"><strong>Sig Algo</strong> ${esc(SIG_ALGO)}</span>
+        <span class="env-item"><strong>Crypto API</strong> WebCrypto (browser native)</span>
+        <span class="env-item"><strong>Time</strong> ${esc(r.verified_at)}</span>
+      </div>
+      <div class="export-section">
+        <span class="meta-lbl" style="margin-bottom:0">Verification report</span>
+        <button class="export-btn" onclick="exportReport()">↓ Download Verification Report (JSON)</button>
+      </div>
+      <div class="trust-note"><div class="trust-dot"></div>This proof was verified independently in your browser using WebCrypto. No server was contacted. No data was transmitted. No external code was loaded.</div>
+      <div class="antitamper"><p>⚠ Do not trust screenshots. Always verify the original proof.json file. DOM elements can be manipulated — only the original JSON file and WebCrypto output are authoritative.</p></div>
+    </div>`;
+}
+
+function exportReport() {
+  if (!lastVerifyResult) return;
+  const blob = new Blob([JSON.stringify({ _type:"zorynex-verification-report", _version:VERIFIER_VERSION, ...lastVerifyResult }, null, 2)], { type:"application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `zorynex-verification-${Date.now()}.json`;
+  a.click();
+}
+
+function resetUI() {
+  $drop.style.display = "block"; $result.style.display = "none";
+  $reset.style.display = "none"; $ver.style.display = "none";
+  $input.value = ""; lastVerifyResult = null;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+</script>
+
+<!-- Module bridge: connects compiled dist/verifier.js (TypeScript build)
+     to the UI. The inline script above works standalone as a fallback.
+     Run: npx serve . (not file://) for module imports to work. -->
+<script type="module">
+// verifier.bundle.js has @noble/ed25519 fully inlined — no external imports needed
+import { verifyProof, verifyChain } from "./dist/verifier.bundle.js";
+window.verifyProofExternal = verifyProof;
+window.verifyChainExternal = verifyChain;
+</script>
+
+</body>
+</html>
