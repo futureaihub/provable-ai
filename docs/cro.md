@@ -100,4 +100,4 @@ GET /audit/report       → PDF audit report
 - Technical integration: see [docs/dev.md](dev.md)
 - Auditor verification: see [docs/auditor.md](auditor.md)
 - Security policy: see [SECURITY.md](../SECURITY.md)
-- Enterprise enquiries: enterprise@zorynex.co
+- Enterprise enquiries: hanif@zorynex.co
