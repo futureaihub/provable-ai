@@ -226,7 +226,9 @@ The browser verifier at `/verify-ui` does require the operator's server to be ru
 
 **Can the operator alter a proof after I receive it?**
 
-No. The `package_hash` covers the entire ledger serialization. Any modification — even a single character — produces a different hash. The CLI and browser verifiers both check this.
+No — if `package_hash` is present. It covers the entire ledger serialization. Any modification — even a single character — produces a different hash. The CLI and browser verifiers both check this.
+
+If `package_hash` is absent from the proof file, the tamper check is skipped and shown as `⚠ [WARN]` — not as `✓ [PASS]`. The verifier will tell you explicitly: *"Cannot confirm this package was not modified after export."* Proofs exported by Zorynex v1.0.0+ always include `package_hash`. A missing field indicates either a very old export format or a manually edited file.
 
 **Can the operator generate a fake proof?**
 

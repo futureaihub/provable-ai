@@ -532,7 +532,7 @@ async function verifyPackage(pkg) {
     const comp = await computePackageHash(ledger);
     if (comp===pkg.package_hash) { c2.passed=true; c2.detail='SHA-256 of full ledger matches package_hash'; }
     else { c2.failure=`Hash mismatch — package was modified after export.\nstored:   ${pkg.package_hash.slice(0,32)}...\ncomputed: ${comp.slice(0,32)}...`; }
-  } else { c2.passed=true; c2.detail='No package_hash — skipped (older export format)'; }
+  } else { c2.passed=true; c2.skipped=true; c2.detail='⚠  No package_hash field — tamper check skipped. Cannot confirm this package was not modified after export.'; }
   checks.push(c2);
 
   const c3 = {name:'Chain valid', passed:false, detail:'', failure:''};
@@ -955,7 +955,7 @@ function downloadReport() {
       doc.setTextColor(...C.white);
       doc.setFont('helvetica','bold');
       doc.setFontSize(7.5);
-      doc.text(c.passed ? 'PASS' : 'FAIL', ML+14, y+7, {align:'center'});
+      doc.text(c.skipped ? 'WARN' : (c.passed ? 'PASS' : 'FAIL'), ML+14, y+7, {align:'center'});
 
       // Check name
       doc.setTextColor(...C.black);
@@ -1149,6 +1149,66 @@ dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
 dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files[0])loadFile(e.dataTransfer.files[0]);});
 fi.addEventListener('change',e=>{if(e.target.files[0])loadFile(e.target.files[0]);});
 function loadFile(f) { const r=new FileReader(); r.onload=e=>{ document.getElementById('jsonInput').value=e.target.result; }; r.readAsText(f); }
+
+// ── Demo mode: ?demo=true auto-loads and verifies sample proof ─────────────────
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('demo') !== 'true') return;
+
+  const banner = document.createElement('div');
+  banner.id = 'demo-banner';
+  banner.style.cssText = [
+    'background:rgba(0,229,160,.08)',
+    'border:1px solid rgba(0,229,160,.25)',
+    'border-radius:6px',
+    'padding:14px 20px',
+    'font-family:monospace',
+    'font-size:12px',
+    'color:#00e5a0',
+    'margin-bottom:20px',
+    'text-align:center',
+    'letter-spacing:.04em',
+  ].join(';');
+  banner.textContent = 'Loading sample proof…';
+
+  const mainArea = document.querySelector('.verifier-main') ||
+                   document.querySelector('main') ||
+                   document.querySelector('.container') ||
+                   document.body;
+  mainArea.insertBefore(banner, mainArea.firstChild);
+
+  const proofUrl = window.location.origin.includes('github.io')
+    ? '/provable-ai/docs/sample_proof.json'
+    : '/sample_proof.json';
+
+  fetch(proofUrl)
+    .then(function(res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function(pkg) {
+      banner.textContent = 'Running verification…';
+      const textarea = document.getElementById('jsonInput');
+      if (textarea) textarea.value = JSON.stringify(pkg, null, 2);
+      setTimeout(function() {
+        banner.textContent = '✓ Sample proof loaded — results below';
+        if (typeof runVerification === 'function') {
+          runVerification();
+        } else {
+          const btn = document.getElementById('verifyBtn');
+          if (btn) btn.click();
+        }
+      }, 600);
+    })
+    .catch(function(err) {
+      banner.style.color = '#ff6b6b';
+      banner.style.borderColor = 'rgba(255,107,107,.25)';
+      banner.style.background = 'rgba(255,107,107,.06)';
+      banner.textContent = 'Could not load demo proof — upload your own proof file below.';
+      console.error('Demo proof load failed:', err);
+    });
+})();
+
 </script>
 </body>
 </html>

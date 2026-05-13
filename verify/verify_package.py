@@ -48,6 +48,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import textwrap
 from typing import Any
 
 
@@ -109,6 +110,7 @@ class CheckResult:
         self.passed  = False
         self.detail  = ""
         self.failure = ""
+        self.skipped = False
 
     def ok(self, detail: str = "") -> "CheckResult":
         self.passed = True
@@ -118,6 +120,13 @@ class CheckResult:
     def fail(self, reason: str) -> "CheckResult":
         self.passed  = False
         self.failure = reason
+        return self
+
+    def warn(self, detail: str = "") -> "CheckResult":
+        """Skipped — cannot verify. Not a pass, not a fail."""
+        self.passed  = True
+        self.skipped = True
+        self.detail  = f"⚠  {detail}"
         return self
 
 
@@ -165,7 +174,9 @@ def verify_package(package: dict) -> tuple[bool, list[CheckResult], dict]:
         else:
             c2.ok("SHA-256 of full ledger matches package_hash")
     else:
-        c2.ok("No package_hash in file — skipped (older export format)")
+        # package_hash absent — cannot verify tamper status, mark as WARN
+        c2.warn("No package_hash field in proof — tamper check skipped. "
+                "Cannot confirm this package was not modified after export.")
     checks.append(c2)
 
     # ── Check 3: Per-proof hashes + chain linkage ─────────────────────────────
@@ -321,8 +332,9 @@ def _print_human(
         "Original signer verified": "Ed25519 signature over instance root",
     }
     for c in checks:
-        icon   = "✓" if c.passed else "✗"
-        status = "PASS" if c.passed else "FAIL"
+        skipped = getattr(c, 'skipped', False)
+        icon   = "⚠" if skipped else ("✓" if c.passed else "✗")
+        status = "WARN" if skipped else ("PASS" if c.passed else "FAIL")
         desc   = check_labels.get(c.name, c.name)
         print(f"  {icon}  [{status}]  {c.name}")
         print(f"        {desc}")
@@ -539,7 +551,6 @@ def main() -> int:
     return 0 if all_passed else 1
 
 
-import textwrap
 
 if __name__ == "__main__":
     sys.exit(main())
