@@ -256,75 +256,224 @@ def _print_human(
     verbose:    bool,
     package:    dict,
 ) -> None:
-    print()
-    for c in checks:
-        if c.passed:
-            detail = f"  ({c.detail})" if c.detail else ""
-            print(f"  ✓  {c.name}{detail}")
-        else:
-            print(f"  ✗  {c.name}")
-            if verbose or True:  # always show failure reason
-                for line in c.failure.split("\n"):
-                    print(f"       {line}")
-    print()
+    proof_block = package.get("proof", {})
+    ledger      = proof_block.get("ledger", [])
+    first       = ledger[0] if ledger else {}
+    gov         = first.get("governance", {})
+    ctx_block   = first.get("decision_context", {})
+    last        = ledger[-1] if ledger else {}
+    last_gov    = last.get("governance", {})   # use last entry for model/policy
+    last_ctx    = last.get("decision_context", {})
 
+    W = 68
+
+    def rule(char="─"):   return "  " + char * W
+    def heavy(char="━"):  return "  " + char * W
+    def blank():          return ""
+    def pad(label, value, lw=22):
+        return f"  │  {label:<{lw}}  {value}"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # HEADER BLOCK
+    # ─────────────────────────────────────────────────────────────────────────
+    print(blank())
+    print(heavy())
+    print(f"  {'ZORYNEX':^{W}}")
+    print(f"  {'PROOF VERIFICATION REPORT':^{W}}")
+    print(heavy())
+
+    import datetime
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    fp  = package.get("proof_fingerprint", "")
+    fp_display = (fp[:24] + "...") if fp else "—"
+
+    print(pad("Verified at",    now,         26))
+    print(pad("Instance ID",    meta.get("instance_id", "unknown"), 26))
+    print(pad("Proof fingerprint", fp_display, 26))
+    print(pad("Verification mode", "OFFLINE — No server access required", 26))
+    print(rule())
+    print(blank())
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # VERDICT
+    # ─────────────────────────────────────────────────────────────────────────
     if all_passed:
-        print("  RESULT:  VERIFIED ✓")
+        verdict_line = f"  ✓  VERDICT: PROOF IS VALID EVIDENCE"
+        print(verdict_line)
+        print(f"  {'All cryptographic checks passed. This artifact is trustworthy.':<{W+2}}")
     else:
-        # Compute a clear human reason based on which checks failed
+        verdict_line = f"  ✗  VERDICT: PROOF FAILED VERIFICATION"
+        print(verdict_line)
+        print(f"  {'This artifact cannot be trusted. Do not present as evidence.':<{W+2}}")
+    print(blank())
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # CRYPTOGRAPHIC CHECKS
+    # ─────────────────────────────────────────────────────────────────────────
+    print(rule())
+    print(f"  CRYPTOGRAPHIC VERIFICATION  ({len(checks)} checks)")
+    print(rule())
+
+    check_labels = {
+        "Package structure valid":  "Proof package schema and required fields",
+        "Package untampered":       "SHA-256 of ledger matches stored package hash",
+        "Chain valid":              "Hash chain linkage verified across all decisions",
+        "Original signer verified": "Ed25519 signature over instance root",
+    }
+    for c in checks:
+        icon   = "✓" if c.passed else "✗"
+        status = "PASS" if c.passed else "FAIL"
+        desc   = check_labels.get(c.name, c.name)
+        print(f"  {icon}  [{status}]  {c.name}")
+        print(f"        {desc}")
+        if not c.passed and c.failure:
+            for line in c.failure.split("\n"):
+                line = line.strip()
+                if line:
+                    print(f"        → {line}")
+        print()
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # FAILURE REASON (if failed)
+    # ─────────────────────────────────────────────────────────────────────────
+    if not all_passed:
         sig_passed    = any(c.name == "Original signer verified" and c.passed for c in checks)
         tamper_failed = any(c.name == "Package untampered"       and not c.passed for c in checks)
         chain_failed  = any(c.name == "Chain valid"              and not c.passed for c in checks)
         struct_failed = any(c.name == "Package structure valid"  and not c.passed for c in checks)
 
-        print("  RESULT:  VERIFICATION FAILED ✗")
-        print()
-        print("  Reason:")
+        print(rule("═"))
+        print(f"  FAILURE ANALYSIS")
+        print(rule("═"))
         if struct_failed:
-            print("    This file is not a valid Zorynex proof package.")
-            print("    It may be corrupted, incomplete, or the wrong file type.")
+            print("  This file is not a valid Zorynex proof package.")
+            print("  It may be corrupted, an incomplete export, or the wrong file type.")
+            print("  Obtain a fresh export from the originating system.")
         elif tamper_failed and sig_passed:
-            print("    This proof was signed by a verified key, but its contents")
-            print("    were modified after it was exported.")
-            print("    The original signer is confirmed — the package itself was tampered.")
-            print("    Do not trust this artifact.")
+            print("  TAMPER DETECTED — SIGNED BY A VALID KEY, THEN MODIFIED")
+            print()
+            print("  The original signer is confirmed. The signing key is valid.")
+            print("  However, the proof contents were altered after signing.")
+            print("  This indicates the file was modified after it left the source system.")
+            print()
+            print("  ⚑  DO NOT ACCEPT THIS AS EVIDENCE")
+            print("  ⚑  REPORT THIS TO YOUR SECURITY TEAM")
         elif chain_failed and sig_passed:
-            print("    This proof was signed by a verified key, but the decision")
-            print("    chain has been altered — a record was inserted, deleted, or reordered.")
-            print("    Do not trust this artifact.")
+            print("  CHAIN INTEGRITY FAILURE — SIGNED BY A VALID KEY, CHAIN ALTERED")
+            print()
+            print("  The original signer is confirmed.")
+            print("  The decision chain has been altered — a record was inserted,")
+            print("  deleted, or reordered after the package was created.")
+            print()
+            print("  ⚑  DO NOT ACCEPT THIS AS EVIDENCE")
         elif tamper_failed:
-            print("    The exported package has been modified since it was created.")
-            print("    The hash does not match. Do not trust this artifact.")
+            print("  PACKAGE TAMPERED — hash mismatch detected.")
+            print("  The exported package was modified since it was created.")
         elif chain_failed:
-            print("    The decision chain is broken. A record may have been altered.")
-            print("    Do not trust this artifact.")
+            print("  CHAIN BROKEN — decision chain linkage is invalid.")
+            print("  One or more records may have been altered.")
         else:
-            print("    One or more cryptographic checks failed.")
-            print("    Do not trust this artifact.")
-        print()
+            print("  One or more cryptographic checks failed.")
+        print(blank())
 
-    proof_block = package.get("proof", {})
-    ledger      = proof_block.get("ledger", [])
+    # ─────────────────────────────────────────────────────────────────────────
+    # PROOF EVIDENCE RECORD
+    # ─────────────────────────────────────────────────────────────────────────
+    print(rule())
+    print(f"  PROOF EVIDENCE RECORD")
+    print(rule())
 
-    print(f"  Instance:    {meta.get('instance_id', 'unknown')}")
-    if "final_state" in meta:
-        print(f"  Final state: {meta['final_state']}")
-    if "seq_range" in meta:
-        print(f"  Chain:       {len(ledger)} decisions  ({meta['seq_range']})")
-    if "key_id" in meta:
-        print(f"  Signed by:   {meta['key_id']}")
-    print()
+    # Timestamps
+    first_ts = (ledger[0].get("ledger", {}) if ledger else {}).get("timestamp", "—")
+    last_ts  = (ledger[-1].get("ledger", {}) if ledger else {}).get("timestamp", "—")
 
-    if verbose and all_passed:
-        print("  ── Proof summary " + "─" * 40)
+    fields = [
+        ("Instance ID",          meta.get("instance_id", "unknown")),
+        ("Chain length",         f"{len(ledger)} decision{'s' if len(ledger) != 1 else ''}"),
+        ("Initial state",        (ledger[0].get("decision", {}).get("from_state", "—") if ledger else "—")),
+        ("Final state",          meta.get("final_state", "—")),
+        ("First decision",       first_ts),
+        ("Last decision",        last_ts),
+        ("",                     ""),
+        ("Model version",        last_gov.get("model_version", gov.get("model_version", "—"))),
+        ("Agent version",        last_gov.get("agent_version", gov.get("agent_version", "—"))),
+        ("Policy version",       last_gov.get("policy_version", gov.get("policy_version", "—"))),
+        ("Reason code",          last_ctx.get("reason_code", ctx_block.get("reason_code", "—"))),
+        ("Policy rule",          last_ctx.get("policy_rule", ctx_block.get("policy_rule", "—"))),
+        ("Threshold used",       last_ctx.get("threshold_used", ctx_block.get("threshold_used", "—"))),
+        ("",                     ""),
+        ("Signing key",          meta.get("key_id", "—")),
+        ("Tamper status",        "CLEAN — No tampering detected" if all_passed else "⚑ TAMPER DETECTED"),
+        ("Proof fingerprint",    (fp[:32] + "...") if fp else "—"),
+        ("Public key (prefix)",  (package.get("public_key", "")[:32] + "...") if package.get("public_key") else "—"),
+        ("Package hash (prefix)",(package.get("package_hash", "")[:32] + "...") if package.get("package_hash") else "—"),
+        ("",                     ""),
+        ("Verification method",  "Independent offline — no server access"),
+        ("Verifier",             "Zorynex verify/verify_package.py"),
+        ("Verification time",    now),
+    ]
+
+    lw = max(len(f[0]) for f in fields if f[0]) + 2
+    for label, value in fields:
+        if not label and not value:
+            print()
+        else:
+            print(f"  {label:<{lw}}  {value}")
+
+    print(blank())
+    print(rule())
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # DECISION CHAIN (always shown when ledger has data)
+    # ─────────────────────────────────────────────────────────────────────────
+    if ledger:
+        print(f"  DECISION CHAIN  ({len(ledger)} entries)")
+        print(rule())
+        # Header
+        print(f"  {'Seq':>3}  {'From State':<22}  {'To State':<22}  {'Timestamp':<20}  Hash")
+        print(f"  {'─'*3}  {'─'*22}  {'─'*22}  {'─'*20}  {'─'*14}")
         for entry in ledger:
-            led = entry.get("ledger", {})
-            dec = entry.get("decision", {})
-            gov = entry.get("governance", {})
-            print(f"  seq {led.get('sequence_id','-'):>3}  "
-                  f"{dec.get('from_state','?'):>20} → {dec.get('to_state','?'):<20}  "
-                  f"model={gov.get('model_version','?')}")
-        print()
+            led  = entry.get("ledger", {})
+            dec  = entry.get("decision", {})
+            seq  = str(led.get("sequence_id", "?"))
+            frm  = dec.get("from_state", "?")[:22]
+            to   = dec.get("to_state",   "?")[:22]
+            ts   = (led.get("timestamp") or "")[:20]
+            h    = led.get("current_hash", "")[:12] + "..."
+            print(f"  {seq:>3}  {frm:<22}  {to:<22}  {ts:<20}  {h}")
+        print(blank())
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # FEATURE CONTRIBUTIONS (if present)
+    # ─────────────────────────────────────────────────────────────────────────
+    fc = last_ctx.get("feature_contributions") or ctx_block.get("feature_contributions", [])
+    if fc and isinstance(fc, list) and len(fc) > 0:
+        print(rule())
+        print(f"  FEATURE CONTRIBUTIONS  (adverse action evidence)")
+        print(rule())
+        print(f"  {'Feature':<32}  {'Contribution':>14}")
+        print(f"  {'─'*32}  {'─'*14}")
+        for item in fc:
+            feat = item.get("feature", "?")[:32]
+            cont = str(item.get("contribution", "?"))
+            print(f"  {feat:<32}  {cont:>14}")
+        print(blank())
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # FOOTER
+    # ─────────────────────────────────────────────────────────────────────────
+    print(heavy())
+    if all_passed:
+        print(f"  {'✓  VERIFICATION COMPLETE — VALID EVIDENCE':^{W}}")
+        print(f"  {'This proof artifact is cryptographically sound.':^{W}}")
+        print(f"  {'It may be presented to auditors and regulators.':^{W}}")
+    else:
+        print(f"  {'✗  VERIFICATION FAILED — DO NOT USE AS EVIDENCE':^{W}}")
+        print(f"  {'This artifact failed cryptographic verification.':^{W}}")
+        print(f"  {'Contact the originating system for a valid export.':^{W}}")
+    print(heavy())
+    print(f"  {'Zorynex Provable AI Infrastructure  ·  zorynex.co':^{W}}")
+    print(blank())
 
 
 def _print_json(all_passed: bool, checks: list[CheckResult], meta: dict) -> None:
