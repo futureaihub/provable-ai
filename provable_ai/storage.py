@@ -182,6 +182,47 @@ class SQLiteStorage:
             END
         """)
 
+
+        # ── Governance approval tables: permanent records — deletion blocked ────
+        # Deactivation sets is_active=0. Physical deletion is NEVER permitted.
+        # These triggers ensure governance history is immutable at the DB level.
+        self.conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS approved_models_no_delete
+            BEFORE DELETE ON approved_models
+            BEGIN
+                SELECT RAISE(ABORT,'ZORYNEX INTEGRITY VIOLATION: governance approvals are permanent. DELETE blocked.');
+            END
+        """)
+        self.conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS approved_agents_no_delete
+            BEFORE DELETE ON approved_agents
+            BEGIN
+                SELECT RAISE(ABORT,'ZORYNEX INTEGRITY VIOLATION: governance approvals are permanent. DELETE blocked.');
+            END
+        """)
+        self.conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS approved_policies_no_delete
+            BEFORE DELETE ON approved_policies
+            BEGIN
+                SELECT RAISE(ABORT,'ZORYNEX INTEGRITY VIOLATION: governance approvals are permanent. DELETE blocked.');
+            END
+        """)
+        # ── Compiled protocols are immutable ────────────────────────────────────
+        self.conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS protocols_no_update
+            BEFORE UPDATE ON protocols
+            BEGIN
+                SELECT RAISE(ABORT,'ZORYNEX INTEGRITY VIOLATION: compiled protocols are immutable. UPDATE blocked.');
+            END
+        """)
+        self.conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS protocols_no_delete
+            BEFORE DELETE ON protocols
+            BEGIN
+                SELECT RAISE(ABORT,'ZORYNEX INTEGRITY VIOLATION: compiled protocols are immutable. DELETE blocked.');
+            END
+        """)
+
         self.conn.commit()
 
     def _migrate_schema(self) -> None:
@@ -583,24 +624,28 @@ class SQLiteStorage:
         if active:
             self.add_approved_policy(policy_version)
         else:
-            # Deactivate = remove from approved_policies table
+            # Deactivate = set active=0, never DELETE (governance history is immutable)
             self.conn.execute(
-                "DELETE FROM approved_policies WHERE policy_version=?",
+                "UPDATE approved_policies SET active = 0 WHERE policy_version = ?",
                 (policy_version,)
             )
             self.conn.commit()
 
     def is_policy_active(self, policy_version: str) -> bool:
-        """Return True if policy_version is in approved_policies."""
+        """Return True if policy_version exists AND is active (active=1)."""
         cur = self.conn.cursor()
-        cur.execute("SELECT 1 FROM approved_policies WHERE policy_version=?",
-                    (policy_version,))
+        cur.execute(
+            "SELECT 1 FROM approved_policies WHERE policy_version=? AND active=1",
+            (policy_version,)
+        )
         return cur.fetchone() is not None
 
     def deactivate_policy(self, policy_version: str) -> None:
-        """Remove policy from approved list — deactivates it."""
+        """Deactivate a policy — sets active=0. Record is never deleted.
+        Governance approvals are permanent records; deactivation only hides
+        the policy from get_approved_policies() without erasing history."""
         self.conn.execute(
-            "DELETE FROM approved_policies WHERE policy_version=?",
+            "UPDATE approved_policies SET active = 0 WHERE policy_version = ?",
             (policy_version,)
         )
         self.conn.commit()

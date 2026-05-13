@@ -441,12 +441,22 @@ class GovernanceEngine:
         ledger_canonical = json.dumps(proof_dicts, sort_keys=True,
                                        separators=(",", ":"), ensure_ascii=False)
         package_hash = hashlib.sha256(ledger_canonical.encode()).hexdigest()
+
+        # proof_fingerprint: cryptographically deterministic proof identity
+        # Auditors can independently derive: SHA256(instance_root + ":" + chain_length)
+        import hashlib as _hlf
+        _chain_len = len(proof_dicts)
+        proof_fingerprint = _hlf.sha256(
+            f"{instance_root}:{_chain_len}".encode()
+        ).hexdigest()
         return {
-            "valid":        True,
-            "type":         "provable-ai-proof-package",
-            "public_key":   pub_key,
-            "signature":    sig_hex,
-            "package_hash": package_hash,
+            "valid":             True,
+            "type":              "provable-ai-proof-package",
+            "public_key":        pub_key,
+            "signature":         sig_hex,
+            "package_hash":      package_hash,
+            "proof_fingerprint": proof_fingerprint,
+            "chain_length":      _chain_len,
             "proof": {
                 "instance_id":   instance_id,
                 "instance_root": instance_root,
@@ -716,12 +726,22 @@ class Engine:
                                         ensure_ascii=False)
         package_hash = hashlib.sha256(ledger_canonical.encode()).hexdigest()
 
+
+        # proof_fingerprint: cryptographically deterministic proof identity
+        # Auditors can independently derive: SHA256(instance_root + ":" + chain_length)
+        import hashlib as _hlf
+        _chain_len = len(proof_dicts)
+        proof_fingerprint = _hlf.sha256(
+            f"{instance_root}:{_chain_len}".encode()
+        ).hexdigest()
         return {
-            "valid":        True,
-            "type":         "provable-ai-proof-package",
-            "public_key":   pub_key,
-            "signature":    sig_hex,
-            "package_hash": package_hash,
+            "valid":             True,
+            "type":              "provable-ai-proof-package",
+            "public_key":        pub_key,
+            "signature":         sig_hex,
+            "package_hash":      package_hash,
+            "proof_fingerprint": proof_fingerprint,
+            "chain_length":      _chain_len,
             "proof": {
                 "instance_id":   instance_id,
                 "instance_root": instance_root,
