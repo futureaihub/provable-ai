@@ -91,6 +91,30 @@ def _log(level: str, message: str, **fields) -> None:
     getattr(logger, level.lower(), logger.info)(json.dumps(entry))
 
 
+def _admin_audit(action: str, request: Request, **fields) -> None:
+    """
+    Emit a structured admin audit trail event.
+    Tracks platform admin actions separately from AI decision events.
+    These events answer: who changed governance? who exported proof X?
+    who rotated a key? who had a failed login?
+    """
+    api_key = request.headers.get("X-API-Key", "unknown")
+    # Mask key — show first 8 chars only
+    actor = api_key[:8] + "..." if len(api_key) > 8 else api_key
+    entry = {
+        "level":      "audit",
+        "event_type": "admin_audit",
+        "action":     action,
+        "actor":      actor,
+        "tenant_id":  getattr(request.state, "tenant_id", "default"),
+        "trace_id":   getattr(request.state, "trace_id",  ""),
+        "timestamp":  datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "ip":         request.client.host if request.client else "unknown",
+        **fields,
+    }
+    logger.info(json.dumps(entry))
+
+
 # ── App setup ─────────────────────────────────────────────────────────────────
 
 app = FastAPI(
@@ -297,6 +321,7 @@ async def _startup_banner() -> None:
     print(f"  ReDoc      →  {base_url}/redoc")
     print(f"  Quickstart →  {base_url}/quickstart")
     print(f"  Verify UI  →  {base_url}/verify-ui")
+    print(f"  Dashboard  →  {base_url}/dashboard")
     print()
     print("  ── Authorize in Swagger " + "─" * 31)
     for key, role in _active_keys.items():
@@ -682,7 +707,17 @@ async def auth_test(
     }
 
 
-@app.post("/protocol/compile", tags=["configure"])
+@app.post("/protocol/compile", tags=["configure"], openapi_extra={
+    "requestBody": {"content": {"application/json": {"example": {
+        "states": ["received", "under_review", "approved", "rejected"],
+        "initial_state": "received",
+        "transitions": [
+            {"from_state": "received",     "to_state": "under_review"},
+            {"from_state": "under_review", "to_state": "approved"},
+            {"from_state": "under_review", "to_state": "rejected"}
+        ]
+    }}}}
+})
 async def compile_protocol(
     request: Request,
     body: ProtocolCompileRequest,
@@ -726,7 +761,11 @@ async def compile_protocol(
 
 # ── Create ─────────────────────────────────────────────────────────────────────
 
-@app.post("/instance/create", tags=["create"])
+@app.post("/instance/create", tags=["create"], openapi_extra={
+    "requestBody": {"content": {"application/json": {"example": {
+        "instance_id": "loan-9284"
+    }}}}
+})
 async def create_instance(
     request: Request,
     body: InstanceCreateRequest,
@@ -783,7 +822,11 @@ async def create_instance(
 
 # ── Governance ─────────────────────────────────────────────────────────────────
 
-@app.post("/governance/model", tags=["configure"])
+@app.post("/governance/model", tags=["configure"], openapi_extra={
+    "requestBody": {"content": {"application/json": {"example": {
+        "name": "credit_model", "version": "v3.1"
+    }}}}
+})
 async def approve_model(
     request: Request,
     body: GovernanceApproveRequest,
@@ -804,6 +847,7 @@ async def approve_model(
         existing = [m["version"] for m in storage.get_approved_models()]
         already  = body.version in existing
         storage.add_approved_model(body.version, model_name=body.name)
+        _admin_audit("governance.model_approved", request, model_version=model_version)
         _log("info", "model_approved", trace_id=trace_id,
              tenant_id=tenant_id, model_name=body.name, model_version=body.version,
              already_approved=already)
@@ -819,7 +863,11 @@ async def approve_model(
         raise HTTPException(status_code=400, detail={"error": "GOVERNANCE_ERROR", "message": str(e)})
 
 
-@app.post("/governance/agent", tags=["configure"])
+@app.post("/governance/agent", tags=["configure"], openapi_extra={
+    "requestBody": {"content": {"application/json": {"example": {
+        "name": "underwriter", "version": "v1.0"
+    }}}}
+})
 async def approve_agent(
     request: Request,
     body: GovernanceApproveRequest,
@@ -834,6 +882,7 @@ async def approve_agent(
     tenant_id = getattr(request.state, "tenant_id", "default")
     try:
         get_storage().add_approved_agent(body.version, agent_name=body.name)
+        _admin_audit("governance.agent_approved", request)
         _log("info", "agent_approved", trace_id=trace_id,
              tenant_id=tenant_id, agent_name=body.name, agent_version=body.version)
         return GovernanceApproveResponse(
@@ -844,7 +893,11 @@ async def approve_agent(
         raise HTTPException(status_code=400, detail={"error": "GOVERNANCE_ERROR", "message": str(e)})
 
 
-@app.post("/governance/policy", tags=["configure"])
+@app.post("/governance/policy", tags=["configure"], openapi_extra={
+    "requestBody": {"content": {"application/json": {"example": {
+        "name": "credit_policy", "version": "v2"
+    }}}}
+})
 async def approve_policy(
     request: Request,
     body: GovernanceApproveRequest,
@@ -859,6 +912,7 @@ async def approve_policy(
     tenant_id = getattr(request.state, "tenant_id", "default")
     try:
         get_storage().add_approved_policy(body.version, policy_name=body.name)
+        _admin_audit("governance.policy_approved", request)
         _log("info", "policy_approved", trace_id=trace_id,
              tenant_id=tenant_id, policy_name=body.name, policy_version=body.version)
         return GovernanceApproveResponse(
@@ -970,6 +1024,7 @@ async def export_proof_package(
                 }
         package    = engine.export_proof(instance_id)
         proof_count= len(package.get("proof", {}).get("ledger", []))
+        _admin_audit("proof.exported", request, instance_id=instance_id)
         _log("info", "proof_exported", trace_id=trace_id, tenant_id=tenant_id,
              instance_id=instance_id, proof_count=proof_count)
 
@@ -999,7 +1054,41 @@ async def export_proof_package(
 
 # ── Execute ─────────────────────────────────────────────────────────────────────
 
-@app.post("/decision", response_model=DecisionResponse, tags=["quickstart"])
+@app.post("/decision", response_model=DecisionResponse, tags=["quickstart"], openapi_extra={
+    "requestBody": {"content": {"application/json": {
+        "examples": {
+            "simple_mode": {
+                "summary": "Simple mode — governance auto-resolves (4 fields minimum)",
+                "value": {
+                    "instance_id": "loan-9284",
+                    "from_state":  "received",
+                    "to_state":    "under_review",
+                    "raw_inputs":  {"credit_score": "742", "debt_to_income": "0.28"}
+                }
+            },
+            "full_mode": {
+                "summary": "Full mode — all governance fields explicit (recommended for production)",
+                "value": {
+                    "instance_id":   "loan-9284",
+                    "from_state":    "received",
+                    "to_state":      "under_review",
+                    "model_version": "credit-model-v3.1",
+                    "agent_version": "underwriter-v1.0",
+                    "policy_version":"credit-policy-v2",
+                    "reason_code":   "SCORE_ABOVE_THRESHOLD",
+                    "policy_rule":   "credit-policy-v2.rule_7",
+                    "raw_inputs":    {"credit_score": "742", "debt_to_income": "0.28"},
+                    "feature_contributions": [
+                        {"feature": "credit_score",   "contribution": "0.65"},
+                        {"feature": "debt_to_income", "contribution": "-0.12"}
+                    ],
+                    "threshold_used": "700",
+                    "metadata":       {"channel": "web", "bureau": "experian"}
+                }
+            }
+        }
+    }}}
+})
 async def record_decision(
     request: Request,
     body: DecisionRequest,
@@ -2962,6 +3051,52 @@ function copy(id) {
 </script>
 </body>
 </html>"""
+
+
+
+@app.get("/dashboard", include_in_schema=False)
+async def compliance_dashboard(
+    request: Request,
+    role: str = Depends(require_role("admin", "auditor")),
+):
+    """Read-only compliance dashboard. Access: admin, auditor"""
+    import json as _json
+    from pathlib import Path
+    from fastapi.responses import HTMLResponse
+
+    tenant_id = request.headers.get("X-Tenant-Id", "default")
+    try:
+        engine = _get_engine(tenant_id)
+        cur    = engine.storage.conn.cursor()
+        cur.execute(
+            "SELECT instance_id, sequence_id, from_state, to_state, "
+            "timestamp, current_hash, model_version FROM ledger "
+            "ORDER BY rowid DESC LIMIT 50"
+        )
+        recent = [{"instance_id": r["instance_id"], "sequence_id": r["sequence_id"],
+                   "from_state": r["from_state"], "to_state": r["to_state"],
+                   "timestamp": (r["timestamp"] or "")[:16],
+                   "hash_prefix": r["current_hash"][:12] + "...",
+                   "model_version": r["model_version"]} for r in cur.fetchall()]
+        cur.execute("SELECT COUNT(DISTINCT instance_id) as c FROM ledger")
+        n_inst = (cur.fetchone() or {"c": 0})["c"]
+        cur.execute("SELECT COUNT(*) as c FROM ledger")
+        n_dec  = (cur.fetchone() or {"c": 0})["c"]
+        models   = engine.storage.get_approved_models()
+        policies = engine.storage.get_approved_policies()
+        stats    = {"instances": n_inst, "decisions": n_dec,
+                    "models": len(models), "policies": len(policies)}
+    except Exception:
+        recent, models, policies, stats = [], [], [], {"instances":0,"decisions":0,"models":0,"policies":0}
+
+    data_blob = _json.dumps({"recent": recent, "models": models,
+                              "policies": policies, "stats": stats, "tenant": tenant_id})
+    dash_path = Path(__file__).parent.parent / "web" / "dashboard.html"
+    template  = dash_path.read_text(encoding="utf-8") if dash_path.exists() else "<html><body>dashboard.html not found</body></html>"
+    html      = template.replace("</body>",
+                    f"<script>window.__ZORYNEX_DASHBOARD_DATA__={data_blob};</script></body>")
+    _admin_audit("dashboard.viewed", request)
+    return HTMLResponse(content=html)
 
 
 @app.get("/verify-ui", include_in_schema=False)

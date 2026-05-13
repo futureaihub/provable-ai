@@ -22,7 +22,9 @@ Phase 3 fix: DB-backed key management with hashing + rotation endpoint.
 from __future__ import annotations
 
 import os
+import logging
 from dataclasses import dataclass
+_auth_logger = logging.getLogger("zorynex.auth")
 from typing import Callable
 
 from fastapi import Depends, HTTPException, Security, status
@@ -136,6 +138,15 @@ def require_role(*allowed_roles: str) -> Callable[..., AuthContext]:
             )
 
         if ctx.role not in allowed:
+            import json as _j, datetime as _dt
+            _audit_entry = {
+                "level": "audit", "event_type": "admin_audit",
+                "action": "auth.role_denied",
+                "actor": ctx.api_key[:8] + "..." if len(ctx.api_key) > 8 else ctx.api_key,
+                "your_role": ctx.role, "required_roles": sorted(allowed),
+                "timestamp": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            }
+            _auth_logger.warning(_j.dumps(_audit_entry))
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
