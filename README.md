@@ -68,6 +68,41 @@ open /verify-ui         →  auditor drags file in, sees green or red
 
 ---
 
+
+## Proof identity — `proof_fingerprint`
+
+Every exported package includes a `proof_fingerprint` field — a cryptographically deterministic identity for the proof that any auditor can independently verify.
+
+**Formula:**
+```
+proof_fingerprint = SHA256(instance_root + ":" + chain_length)
+```
+
+**Example:**
+```json
+{
+  "proof_fingerprint": "b7ee4d91b9fcde28a3c4f9e1d0b2a7c6...(64 hex chars)...",
+  "chain_length":      2,
+  "instance_root":     "eed1202fd77c54085e9e024ddacaa554...",
+  ...
+}
+```
+
+To verify independently:
+```python
+import hashlib, json
+
+pkg            = json.load(open("proof.json"))
+instance_root  = pkg["proof"]["instance_root"]
+chain_length   = pkg["chain_length"]
+expected       = hashlib.sha256(f"{instance_root}:{chain_length}".encode()).hexdigest()
+
+assert expected == pkg["proof_fingerprint"], "Fingerprint mismatch — proof identity cannot be confirmed"
+print("✓ Fingerprint verified:", expected[:16], "...")
+```
+
+This check is independent of the cryptographic signature verification — it confirms proof identity, not proof integrity. Run it before submitting a proof to a regulator or auditor to confirm you have the correct package.
+
 ## API at a glance
 
 | | Endpoint | What it does |

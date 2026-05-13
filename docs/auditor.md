@@ -159,6 +159,35 @@ GET /audit/report        # PDF audit report
 
 ## Frequently asked questions
 
+**What is `proof_fingerprint` and how do I verify it?**
+
+`proof_fingerprint` is a cryptographically deterministic identity for the proof package — reproducible by anyone with access to the package fields.
+
+**Formula:**
+```
+proof_fingerprint = SHA256(instance_root + ":" + chain_length)
+```
+
+Both `instance_root` and `chain_length` are embedded in the package. To verify independently:
+
+```python
+import hashlib, json
+
+pkg           = json.load(open("proof.json"))
+instance_root = pkg["proof"]["instance_root"]
+chain_length  = pkg["chain_length"]
+expected      = hashlib.sha256(f"{instance_root}:{chain_length}".encode()).hexdigest()
+
+assert expected == pkg["proof_fingerprint"]
+print("✓ Fingerprint confirmed:", expected[:16] + "...")
+```
+
+This is separate from the Ed25519 signature check. The fingerprint confirms proof identity (you have the right package). The signature confirms proof integrity (the package has not been modified). Both checks should pass.
+
+**What does `chain_length` tell me?**
+
+`chain_length` is the number of decisions in the proof package ledger. If you requested proof for an instance with 5 recorded decisions and `chain_length` is 3, two entries are missing. Always verify `chain_length` matches your expected decision count before accepting a proof as complete evidence.
+
 **Can the operator alter a proof after I receive it?**
 No. The `package_hash` covers the entire ledger serialization. Any modification — even a single character — produces a different hash. The browser and CLI verifiers both check this.
 
