@@ -1,0 +1,53 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Zorynex Provable AI  ·  v{{ .Chart.AppVersion }}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Release:    {{ .Release.Name }}
+Namespace:  {{ .Release.Namespace }}
+Backend:    {{ .Values.config.backend }}
+Workers:    {{ .Values.config.workers }}
+
+{{- if .Values.ingress.enabled }}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Access URLs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{{- range .Values.ingress.hosts }}
+  API:       https://{{ .host }}/docs
+  Verify UI: https://{{ .host }}/verify-ui
+  Dashboard: https://{{ .host }}/dashboard
+  Health:    https://{{ .host }}/health
+{{- end }}
+{{- else }}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Port-Forward (no ingress)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  kubectl port-forward -n {{ .Release.Namespace }} \
+    svc/{{ include "zorynex.fullname" . }} 8000:80
+
+  Then open: http://localhost:8000/docs
+{{- end }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Quick Verification
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Health check
+  curl https://{{ (index .Values.ingress.hosts 0).host | default "your-domain" }}/health
+
+  # Bootstrap demo environment
+  curl -X POST https://{{ (index .Values.ingress.hosts 0).host | default "your-domain" }}/demo/bootstrap \
+    -H "X-API-Key: <your-api-key>"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Important
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Signing key: {{ if .Values.kms.enabled }}AWS KMS ({{ .Values.kms.keyId }}){{ else }}Environment variable — use KMS in production{{ end }}
+  Persistence: {{ if .Values.persistence.enabled }}PVC ({{ .Values.persistence.size }}){{ else }}DISABLED — data will be lost on pod restart{{ end }}
+  Tenant mode: {{ .Values.config.requireTenant }}
+
+{{- if not .Values.kms.enabled }}
+  ⚠  Production deployments should use AWS KMS signing.
+     Set kms.enabled=true and configure kms.keyId.
+{{- end }}
+
+  Docs:    https://zorynex.co
+  Support: hanif@zorynex.co

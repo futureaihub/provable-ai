@@ -1,0 +1,31 @@
+apiVersion: v2
+name: zorynex
+description: >
+  Zorynex Provable AI Infrastructure.
+  Cryptographic proof layer for AI decisions — independently verifiable,
+  tamper-evident, audit-ready.
+
+type: application
+
+version: 1.0.0
+appVersion: "2.0.0"
+
+keywords:
+  - ai-governance
+  - provable-ai
+  - compliance
+  - audit
+  - cryptographic-proof
+  - fintech
+
+maintainers:
+  - name: Hanif Shaik
+    email: hanif@zorynex.co
+    url: https://zorynex.co
+
+home: https://zorynex.co
+sources:
+  - https://github.com/futureaihub/provable-ai
+
+annotations:
+  category: Security & Compliance

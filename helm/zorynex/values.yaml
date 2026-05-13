@@ -1,0 +1,216 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Zorynex Helm Chart — Default Values
+#
+# Usage:
+#   helm install zorynex ./helm/zorynex -f my-values.yaml
+#
+# Required overrides (no working defaults):
+#   secrets.apiKeys        — API keys, format: "key:role,key:role"
+#   secrets.signingKey     — 64-char hex Ed25519 private key (dev only)
+#                            OR configure kms.* for production
+#
+# See docs/integration.md for full configuration reference.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Image ─────────────────────────────────────────────────────────────────────
+image:
+  repository: zorynex
+  tag: "2.0.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# ── Replica count ─────────────────────────────────────────────────────────────
+# SQLite: always 1 (single writer — do NOT increase)
+# PostgreSQL: 2–4 recommended
+replicaCount: 1
+
+# ── Application configuration ─────────────────────────────────────────────────
+config:
+  # "sqlite" or "postgres"
+  backend: sqlite
+
+  # Number of uvicorn workers
+  # SQLite: must be 1
+  # PostgreSQL: 2–4 (uses advisory locking — safe)
+  workers: 1
+
+  # Enforce X-Tenant-Id header on all requests
+  requireTenant: "true"
+
+  # Enable RFC 3161 external timestamps (recommended for production)
+  anchorRfc3161: "true"
+  tsaUrl: "https://freetsa.org/tsr"
+
+  # CORS allowed origins (comma-separated)
+  corsOrigins: ""
+
+  # Log level: info, warning, error
+  logLevel: "info"
+
+# ── PostgreSQL connection (when backend=postgres) ─────────────────────────────
+postgresql:
+  # Full connection string — use secrets in production
+  # Recommended: point to pgBouncer for connection pooling
+  url: "postgresql://zorynex:zorynex@postgres:5432/zorynex"
+
+# ── AWS KMS signing (production) ──────────────────────────────────────────────
+kms:
+  enabled: false
+  # Primary key ID or alias
+  keyId: ""
+  # Fallback key ID (for FailoverSigner)
+  fallbackKeyId: ""
+  # AWS region
+  region: "us-east-1"
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
+secrets:
+  # Create a new Secret from these values.
+  # For production: set create=false and reference existing secrets below.
+  create: true
+
+  # API keys — format: "admin-key:admin,audit-key:auditor,svc-key:system"
+  # Override this — no secure default exists.
+  apiKeys: "dev-key:admin"
+
+  # Ed25519 private key (64-char hex)
+  # Dev: generate with bootstrap.py
+  # Prod: use kms.enabled=true instead
+  signingKey: ""
+
+  # Webhook HMAC secret
+  webhookSecret: ""
+
+  # Reference existing secret (when create=false)
+  existingSecretName: ""
+
+# ── Storage ───────────────────────────────────────────────────────────────────
+persistence:
+  enabled: true
+  # SQLite data directory
+  mountPath: /data
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  # Size: ~1KB per decision, plan for your decision volume
+  size: 10Gi
+  annotations: {}
+
+# ── Service ───────────────────────────────────────────────────────────────────
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+  annotations: {}
+
+# ── Ingress ───────────────────────────────────────────────────────────────────
+ingress:
+  enabled: false
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    # Rate limiting at ingress level
+    nginx.ingress.kubernetes.io/limit-rps: "60"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
+  hosts:
+    - host: zorynex.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: zorynex-tls
+      hosts:
+        - zorynex.example.com
+
+# ── Resources ─────────────────────────────────────────────────────────────────
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: "2"
+    memory: 1Gi
+
+# ── Horizontal Pod Autoscaler ─────────────────────────────────────────────────
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# ── Pod Disruption Budget ─────────────────────────────────────────────────────
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# ── Service Account ───────────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# AWS IRSA (IAM Roles for Service Accounts) — for KMS signing
+# serviceAccount:
+#   annotations:
+#     eks.amazonaws.com/role-arn: arn:aws:iam::123456789:role/zorynex-signing-role
+
+# ── Pod annotations and labels ────────────────────────────────────────────────
+podAnnotations:
+  # Prometheus scraping — metrics at /metrics (admin role required)
+  prometheus.io/scrape: "true"
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "8000"
+
+podLabels: {}
+
+# ── Security context ──────────────────────────────────────────────────────────
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false   # uvicorn needs to write temp files
+  capabilities:
+    drop:
+      - ALL
+
+# ── Probes ────────────────────────────────────────────────────────────────────
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8000
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# ── Node scheduling ───────────────────────────────────────────────────────────
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# ── Extra environment variables ───────────────────────────────────────────────
+extraEnv: []
+# - name: ZORYNEX_SIEM_TRANSPORT
+#   value: "webhook"
+# - name: ZORYNEX_SIEM_WEBHOOK_URL
+#   value: "https://your-siem.example.com/ingest"
+
+# ── Extra volume mounts ───────────────────────────────────────────────────────
+extraVolumeMounts: []
+extraVolumes: []

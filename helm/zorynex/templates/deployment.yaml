@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "zorynex.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "zorynex.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "zorynex.selectorLabels" . | nindent 6 }}
+  strategy:
+    {{- if eq .Values.config.backend "sqlite" }}
+    # SQLite: Recreate — only one writer allowed at a time
+    type: Recreate
+    {{- else }}
+    # PostgreSQL: RollingUpdate — multiple workers safe with advisory locking
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "zorynex.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        # Force rollout when configmap or secret changes
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "zorynex.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: zorynex
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          # ── Environment: non-sensitive config ───────────────────────────────
+          envFrom:
+            - configMapRef:
+                name: {{ include "zorynex.fullname" . }}
+          # ── Environment: secrets ────────────────────────────────────────────
+          env:
+            - name: ZORYNEX_API_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "zorynex.secretName" . }}
+                  key: ZORYNEX_API_KEYS
+            {{- if not .Values.kms.enabled }}
+            - name: ZORYNEX_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "zorynex.secretName" . }}
+                  key: ZORYNEX_SIGNING_KEY
+                  optional: true
+            {{- end }}
+            - name: ZORYNEX_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "zorynex.secretName" . }}
+                  key: ZORYNEX_WEBHOOK_SECRET
+                  optional: true
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          # ── Probes ─────────────────────────────────────────────────────────
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          # ── Resources ──────────────────────────────────────────────────────
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          # ── Volume mounts ──────────────────────────────────────────────────
+          volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: data
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      # ── Volumes ─────────────────────────────────────────────────────────────
+      volumes:
+        {{- if .Values.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "zorynex.fullname" . }}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

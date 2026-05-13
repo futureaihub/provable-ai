@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "zorynex.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "zorynex.labels" . | nindent 4 }}
+data:
+  ZORYNEX_BACKEND:        {{ .Values.config.backend | quote }}
+  ZORYNEX_WORKERS:        {{ .Values.config.workers | toString | quote }}
+  ZORYNEX_REQUIRE_TENANT: {{ .Values.config.requireTenant | quote }}
+  ZORYNEX_ANCHOR_RFC3161: {{ .Values.config.anchorRfc3161 | quote }}
+  ZORYNEX_TSA_URL:        {{ .Values.config.tsaUrl | quote }}
+  ZORYNEX_DB_PATH:        "/data/provable_ai.db"
+  ZORYNEX_AUDIT_DB_PATH:  "/data/zorynex_audit.db"
+  ZORYNEX_ANCHOR_DB_PATH: "/data/zorynex_anchors.db"
+  ZORYNEX_KEYREGISTRY_DB_PATH: "/data/zorynex_keyregistry.db"
+  ZORYNEX_DRIFT_DB_PATH:  "/data/zorynex_drift.db"
+  {{- if .Values.config.corsOrigins }}
+  ZORYNEX_CORS_ORIGINS:   {{ .Values.config.corsOrigins | quote }}
+  {{- end }}
+  {{- if eq .Values.config.backend "postgres" }}
+  DATABASE_URL:           {{ .Values.postgresql.url | quote }}
+  {{- end }}
+  {{- if .Values.kms.enabled }}
+  ZORYNEX_KMS_KEY_ID:         {{ .Values.kms.keyId | quote }}
+  ZORYNEX_KMS_REGION:         {{ .Values.kms.region | quote }}
+  {{- if .Values.kms.fallbackKeyId }}
+  ZORYNEX_KMS_FALLBACK_KEY_ID: {{ .Values.kms.fallbackKeyId | quote }}
+  {{- end }}
+  {{- end }}
+  PORT: "8000"
