@@ -1,0 +1,86 @@
+{
+  "type": "provable-ai-proof-package",
+  "exported_at": "2026-05-13T09:00:00Z",
+  "instance_id": "loan-sample-9284",
+  "chain_length": 2,
+  "proof_fingerprint": "b7ee4d91b9fcde28a3c4f9e1d0b2a7c6e5f8d3a1b9c2e4f7d6a8b3c5e7f9d1a",
+  "public_key": "a428fc62d5c0b875e3f1d9a2c4b6e8f0d2a4c6e8b0d2f4a6c8e0b2d4f6a8c0e",
+  "signature": "9f3a1b5c7e2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a4c6e8b0d2f4a6c8e0b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a4c6e8b0d2f4",
+  "package_hash": "6358d2d4ee79b3c1a4f2e8d6b0a9c3e5f7d1b5a3c7e9f1d3b7a5c1e3f5d7b9",
+  "proof": {
+    "instance_id": "loan-sample-9284",
+    "instance_root": "eed1202fd77c54085e9e024ddacaa554b3c6d8f0a2e4c6b8d0f2a4c6e8b0d2f4",
+    "ledger": [
+      {
+        "ledger": {
+          "sequence_id": 1,
+          "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "current_hash": "7a3f1b9c5e2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a4c6e8b0d2f",
+          "timestamp": "2026-05-13T08:45:00Z",
+          "key_id": "env-a428fc62d5c0b875"
+        },
+        "decision": {
+          "from_state": "received",
+          "to_state": "under_review"
+        },
+        "governance": {
+          "model_version": "credit-model-v3.1",
+          "agent_version": "underwriter-v1.0",
+          "policy_version": "credit-policy-v2",
+          "protocol_hash": "c3d5e7f9a1b3c5e7f9a1b3c5e7f9a1b3c5e7f9a1b3c5e7f9a1b3c5e7f9a1b3"
+        },
+        "decision_context": {
+          "reason_code": "INITIAL_REVIEW",
+          "policy_rule": "credit-policy-v2.rule_1",
+          "inputs_hash": "sha256:d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4",
+          "feature_contributions": [
+            {
+              "feature": "credit_score",
+              "contribution": "0.65"
+            },
+            {
+              "feature": "debt_to_income",
+              "contribution": "-0.12"
+            }
+          ],
+          "threshold_used": "700"
+        }
+      },
+      {
+        "ledger": {
+          "sequence_id": 2,
+          "previous_hash": "7a3f1b9c5e2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a4c6e8b0d2f",
+          "current_hash": "9c1e3a5b7d9f1b3c5e7a9c1e3a5b7d9f1b3c5e7a9c1e3a5b7d9f1b3c5e7a9c",
+          "timestamp": "2026-05-13T09:00:00Z",
+          "key_id": "env-a428fc62d5c0b875"
+        },
+        "decision": {
+          "from_state": "under_review",
+          "to_state": "approved"
+        },
+        "governance": {
+          "model_version": "credit-model-v3.1",
+          "agent_version": "underwriter-v1.0",
+          "policy_version": "credit-policy-v2",
+          "protocol_hash": "c3d5e7f9a1b3c5e7f9a1b3c5e7f9a1b3c5e7f9a1b3c5e7f9a1b3c5e7f9a1b3"
+        },
+        "decision_context": {
+          "reason_code": "SCORE_ABOVE_THRESHOLD",
+          "policy_rule": "credit-policy-v2.rule_7",
+          "inputs_hash": "sha256:d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4",
+          "feature_contributions": [
+            {
+              "feature": "credit_score",
+              "contribution": "0.65"
+            },
+            {
+              "feature": "debt_to_income",
+              "contribution": "-0.12"
+            }
+          ],
+          "threshold_used": "700"
+        }
+      }
+    ]
+  }
+}
