@@ -112,4 +112,7 @@ Thumbs.db
 # ==========================
 # Alembic
 # ==========================
-alembic/versions/*.pyc
+alembic/versions/*.pycprovable_ai.db
+provable_key.hex
+zorynex_audit.db
+zorynex_keyregistry.db
