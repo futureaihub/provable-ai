@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import hashlib
@@ -444,12 +443,12 @@ class GovernanceEngine:
 
         # proof_fingerprint: cryptographically deterministic proof identity
         # Auditors can independently derive: SHA256(instance_root + ":" + chain_length)
-        import hashlib as _hlf
         _chain_len = len(proof_dicts)
-        proof_fingerprint = _hlf.sha256(
+        proof_fingerprint = hashlib.sha256(
             f"{instance_root}:{_chain_len}".encode()
         ).hexdigest()
-        return {
+
+        package = {
             "valid":             True,
             "type":              "provable-ai-proof-package",
             "public_key":        pub_key,
@@ -463,6 +462,14 @@ class GovernanceEngine:
                 "ledger":        proof_dicts,
             },
         }
+
+        # Enforce: package_hash must always be present and non-empty.
+        # Old proofs (no package_hash) → verifier shows ⚠ WARN
+        # New proofs (v1.0.0+) → verifier shows ✓ PASS or ✗ FAIL
+        assert "package_hash" in package and package["package_hash"], \
+            "BUG: GovernanceEngine.export_proof() must always produce a package_hash"
+
+        return package
 
 
 class Engine:
@@ -720,21 +727,19 @@ class Engine:
         if instance_id in self._instances:
             pass  # keep in memory but mark frozen implicitly
 
-        import json as _json
         # package_hash covers the full ledger serialization — any modification changes it
-        ledger_canonical = _json.dumps(proof_dicts, sort_keys=True, separators=(",", ":"),
-                                        ensure_ascii=False)
+        ledger_canonical = json.dumps(proof_dicts, sort_keys=True, separators=(",", ":"),
+                                      ensure_ascii=False)
         package_hash = hashlib.sha256(ledger_canonical.encode()).hexdigest()
-
 
         # proof_fingerprint: cryptographically deterministic proof identity
         # Auditors can independently derive: SHA256(instance_root + ":" + chain_length)
-        import hashlib as _hlf
         _chain_len = len(proof_dicts)
-        proof_fingerprint = _hlf.sha256(
+        proof_fingerprint = hashlib.sha256(
             f"{instance_root}:{_chain_len}".encode()
         ).hexdigest()
-        return {
+
+        package = {
             "valid":             True,
             "type":              "provable-ai-proof-package",
             "public_key":        pub_key,
@@ -748,6 +753,14 @@ class Engine:
                 "ledger":        proof_dicts,
             },
         }
+
+        # Enforce: package_hash must always be present and non-empty.
+        # Old proofs (no package_hash) → verifier shows ⚠ WARN
+        # New proofs (v1.0.0+) → verifier shows ✓ PASS or ✗ FAIL
+        assert "package_hash" in package and package["package_hash"], \
+            "BUG: Engine.export_proof() must always produce a package_hash"
+
+        return package
 
     # ── System root ───────────────────────────────────────────────────────────
 
