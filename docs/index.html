@@ -433,14 +433,20 @@
 
   <div class="or-divider">or paste JSON</div>
 
+  <div id="jsonWrap">
+  <div id="jsonCollapsed" style="display:none;background:var(--black-2);border:1.5px solid var(--black-4);border-radius:var(--radius);padding:.85rem 1.1rem;cursor:pointer;font-family:var(--mono);font-size:.78rem;color:var(--green);display:none;align-items:center;gap:.5rem" onclick="expandJson()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+    View / Edit proof JSON &rarr;
+  </div>
   <textarea id="jsonInput" placeholder='Paste exported proof package JSON here...&#10;{"type":"provable-ai-proof-package","proof":{...}}'></textarea>
+</div>
 
   <div class="actions">
     <button class="btn btn-primary" id="verifyBtn" onclick="runVerification()">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
       Verify Package
     </button>
-    <button class="btn btn-ghost" onclick="loadTamperDemo()">Load tamper demo</button>
+    <button class="btn btn-ghost" onclick="loadTamperDemo()">See tampered proof fail</button>
     <button class="btn btn-ghost" id="clearBtn" style="display:none" onclick="clearAll()">Clear</button>
   </div>
 
@@ -448,6 +454,7 @@
 
   <div id="results">
 
+    <div id="verifyContext" style="font-size:.82rem;color:#888;font-family:var(--mono);margin-bottom:-.25rem;padding:.5rem 0;letter-spacing:.02em"></div>
     <div class="result-header" id="resultHeader">
       <div class="result-badge" id="resultBadge"></div>
       <div>
@@ -467,8 +474,8 @@
 
     <div class="meta-card" id="chainSection" style="display:none">
       <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;padding:.65rem 1.25rem">
-        <span>Decision chain</span>
-        <button class="chain-toggle-btn" id="chainToggle" onclick="toggleChain()">▶ Show decisions</button>
+        <span>Decision audit trail</span>
+        <button class="chain-toggle-btn" id="chainToggle" onclick="toggleChain()">▶ Show audit trail</button>
       </div>
       <div id="chainBody" style="display:none;overflow-x:auto">
         <table class="chain-table" id="chainTable"></table>
@@ -596,6 +603,16 @@ function renderResult(result, pkg) {
   document.getElementById('resultTitle').textContent=passed?'Verification passed':'Verification failed';
   document.getElementById('resultSub').textContent=`${meta.instance_id||'unknown'}  ·  ${checks.filter(c=>c.passed).length}/${checks.length} checks passed`;
 
+  // Context sentence
+  const ctxEl = document.getElementById('verifyContext');
+  if (ctxEl) {
+    const inst = meta.instance_id || 'unknown';
+    const isDemo = inst.includes('loan') || inst.includes('demo');
+    ctxEl.textContent = isDemo
+      ? 'This loan approval proof was verified entirely in your browser — no data sent to any server.'
+      : `Proof for instance "${inst}" was verified entirely in your browser — no data sent to any server.`;
+  }
+
   // ── Smart failure reason ────────────────────────────────────────────────
   const reasonEl = document.getElementById('failureReason');
   if (reasonEl) {
@@ -611,11 +628,11 @@ function renderResult(result, pkg) {
       } else if (tamperFailed && sigPassed) {
         reason = 'This proof was signed by a verified key, but its contents were modified after it was exported. The original signer is confirmed — the package itself was tampered. Do not trust this artifact.';
       } else if (chainFailed && sigPassed) {
-        reason = 'This proof was signed by a verified key, but the decision chain has been altered — a record was inserted, deleted, or reordered. Do not trust this artifact.';
+        reason = 'This proof was signed by a verified key, but the decision audit trail has been altered — a record was inserted, deleted, or reordered. Do not trust this artifact.';
       } else if (tamperFailed) {
         reason = 'The exported package has been modified since it was created. Do not trust this artifact.';
       } else if (chainFailed) {
-        reason = 'The decision chain is broken — a record may have been altered. Do not trust this artifact.';
+        reason = 'The decision audit trail is broken — a record may have been altered. Do not trust this artifact.';
       } else {
         reason = 'One or more cryptographic checks failed. Do not trust this artifact.';
       }
@@ -640,7 +657,7 @@ function renderResult(result, pkg) {
   const rows=[
     ['Instance',     meta.instance_id],
     ['Final state',  meta.final_state,'state'],
-    ['Chain length', `${ledger.length} decision${ledger.length!==1?'s':''}  (${meta.seq_range||''})`.trim()],
+    ['Chain length', `${ledger.length} verified decision${ledger.length!==1?'s':''}  (${meta.seq_range||''})`.trim()],
     ['Model',        meta.model],
     ['Agent',        meta.agent],
     ['Policy',       meta.policy],
@@ -672,7 +689,7 @@ function toggleChain() {
   const body=document.getElementById('chainBody'), btn=document.getElementById('chainToggle');
   const open=body.style.display==='none';
   body.style.display=open?'':'none';
-  btn.textContent=open?'▾ Hide decisions':'▶ Show decisions';
+  btn.textContent=open?'▾ Hide audit trail':'▶ Show audit trail';
 }
 function clearAll() {
   document.getElementById('jsonInput').value='';
@@ -887,11 +904,11 @@ function downloadReport() {
       } else if (tamperFailed && sigPassed) {
         failReason = 'This proof was signed by a verified key, but its contents were modified after export. The original signer is confirmed — the package itself was tampered after signing.';
       } else if (chainFailed && sigPassed) {
-        failReason = 'This proof was signed by a verified key, but the decision chain has been altered — a record was inserted, deleted, or reordered after signing.';
+        failReason = 'This proof was signed by a verified key, but the decision audit trail has been altered — a record was inserted, deleted, or reordered after signing.';
       } else if (tamperFailed) {
         failReason = 'The exported package has been modified since it was created.';
       } else if (chainFailed) {
-        failReason = 'The decision chain is broken — a record may have been altered.';
+        failReason = 'The decision audit trail is broken — a record may have been altered.';
       }
 
       const warnLines = doc.splitTextToSize(failReason, TW - 20);
@@ -996,17 +1013,21 @@ function downloadReport() {
     const metaRows = [
       ['Instance ID',    meta.instance_id||'—'],
       ['Final state',    meta.final_state||'—'],
-      ['Chain length',   `${ledger.length} decision${ledger.length!==1?'s':''}`],
+      ['Chain length',   `${ledger.length} verified decision${ledger.length!==1?'s':''}`],
       ['Model version',  meta.model||'—'],
       ['Agent version',  meta.agent||'—'],
       ['Policy version', meta.policy||'—'],
       ['First decision', meta.first_ts||'—'],
       ['Last decision',  meta.last_ts||'—'],
-      ['Signing key',    meta.key_id||'—'],
+      ['Signing key (Ed25519)', (meta.key_id||'—').replace(/^env-/,'')],
       ['Public key',     trunc(meta.public_key, 48)],
       ['Package hash',   trunc(lastPkg?.package_hash, 48)],
+      ['Proof fingerprint', trunc(lastPkg?.proof_fingerprint, 48)],
+      ['Cryptographic algorithms', 'Ed25519 signing · SHA-256 hash chain · Canonical JSON'],
+      ['Verifier',       'verify.zorynex.co — Independent offline browser verifier'],
       ['Verified via',   'Browser Verifier | Offline | No server access'],
       ['Report time',    nowHR],
+      ['Export timestamp', lastPkg?.proof ? (lastPkg.proof.ledger||[]).length > 0 ? ((lastPkg.proof.ledger[lastPkg.proof.ledger.length-1].ledger||{}).timestamp||'—') : '—' : '—'],
     ].filter(r=>r[1]&&r[1]!=='—');
 
     const COL1 = 44; // label column width
@@ -1058,11 +1079,11 @@ function downloadReport() {
     y += 10;
 
     // ════════════════════════════════════════════════════════════════════════
-    // DECISION CHAIN TABLE — always included if data exists
+    // DECISION AUDIT TRAIL — always included if data exists
     // ════════════════════════════════════════════════════════════════════════
     if (ledger.length > 0) {
       y = checkPageBreak(y, 30);
-      y = sectionLabel(y, 'DECISION CHAIN');
+      y = sectionLabel(y, 'DECISION AUDIT TRAIL');
 
       // Column widths: Seq | From | To | Model | Timestamp | Hash
       const cSeq=12, cFrom=34, cTo=34, cModel=38, cTs=34, cHash=TW-cSeq-cFrom-cTo-cModel-cTs;
@@ -1123,7 +1144,7 @@ function downloadReport() {
   const lines = [
     'ZORYNEX PROOF VERIFICATION REPORT', '='.repeat(56),
     `Generated:    ${nowISO}`,`Instance:     ${meta.instance_id||'?'}`,
-    `Final state:  ${meta.final_state||'?'}`,`Chain:        ${ledger.length} decisions`,
+    `Final state:  ${meta.final_state||'?'}`,`Chain:        ${ledger.length} verified decision${ledger.length!==1?"s":""}`,
     `Signing key:  ${meta.key_id||'?'}`,'','VERIFICATION RESULTS','-'.repeat(56),
     ...checks.map(c=>`${c.passed?'✓':'✗'} ${c.name}`+(c.detail?`\n  ${c.detail}`:'')+( c.failure?`\n  FAILURE: ${c.failure}`:'')),
     '',`RESULT: ${passed?'VERIFIED ✓':'VERIFICATION FAILED ✗'}`,
@@ -1148,7 +1169,26 @@ dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');}
 dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
 dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files[0])loadFile(e.dataTransfer.files[0]);});
 fi.addEventListener('change',e=>{if(e.target.files[0])loadFile(e.target.files[0]);});
-function loadFile(f) { const r=new FileReader(); r.onload=e=>{ document.getElementById('jsonInput').value=e.target.result; }; r.readAsText(f); }
+function loadFile(f) {
+  const r=new FileReader();
+  r.onload=e=>{
+    document.getElementById('jsonInput').value=e.target.result;
+    expandJson(); // always show JSON when user uploads manually
+  };
+  r.readAsText(f);
+}
+function collapseJson() {
+  const ta=document.getElementById('jsonInput');
+  const col=document.getElementById('jsonCollapsed');
+  if(ta) ta.style.display='none';
+  if(col) { col.style.display='flex'; }
+}
+function expandJson() {
+  const ta=document.getElementById('jsonInput');
+  const col=document.getElementById('jsonCollapsed');
+  if(ta) ta.style.display='';
+  if(col) col.style.display='none';
+}
 
 // ── Demo mode: ?demo=true auto-loads and verifies sample proof ─────────────────
 (function() {
@@ -1192,6 +1232,7 @@ function loadFile(f) { const r=new FileReader(); r.onload=e=>{ document.getEleme
       if (textarea) textarea.value = JSON.stringify(pkg, null, 2);
       setTimeout(function() {
         banner.textContent = '✓ Sample proof loaded — results below';
+        collapseJson(); // hide raw JSON for non-technical visitors
         if (typeof runVerification === 'function') {
           runVerification();
         } else {
