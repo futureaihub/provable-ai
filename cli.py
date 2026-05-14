@@ -72,10 +72,12 @@ def cmd_verify(args: argparse.Namespace) -> int:
     with open(args.proof_file) as f:
         data = json.load(f)
 
-    # Handle both single proof and proof package
+    # Handle both single proof and canonical proof package
     if data.get("type") == "provable-ai-proof-package":
         from provable_ai.verifier import verify_chain
-        proofs = data.get("proofs", [])
+        # Canonical format: proof.ledger[]
+        proof_block = data.get("proof", {})
+        proofs = proof_block.get("ledger", [])
         result = verify_chain(proofs)
         status = "VALID" if result.valid else "INVALID"
         print(f"\nChain verification: {status}")
@@ -125,8 +127,30 @@ def cmd_chain_verify(args: argparse.Namespace) -> int:
 # ── export ────────────────────────────────────────────────────────────────────
 
 def cmd_export(args: argparse.Namespace) -> int:
+    """
+    Export a canonical proof package — same schema as GovernanceEngine.export_proof()
+    and the API's GET /proof/export?inline=true.
+
+    Schema:
+    {
+      "type":              "provable-ai-proof-package",
+      "public_key":        "...",
+      "signature":         "...",
+      "package_hash":      "...",
+      "proof_fingerprint": "...",
+      "chain_length":      N,
+      "proof": {
+        "instance_id":   "...",
+        "instance_root": "...",
+        "ledger":        [...]
+      }
+    }
+    """
+    import hashlib
     import json as _json
-    _, storage = _get_engine()
+    from provable_ai.signer import get_signer
+
+    engine, storage = _get_engine()
 
     chain = storage.get_ledger_chain(args.instance)
     if not chain:
@@ -138,13 +162,43 @@ def cmd_export(args: argparse.Namespace) -> int:
         if e.get("proof_json") and e["proof_json"] != "{}"
     ]
 
+    if not proof_dicts:
+        print(f"No valid proof entries for instance: {args.instance}")
+        return 1
+
+    # Compute instance root — SHA-256 of all current_hashes in order
+    hashes = [p.get("ledger", {}).get("current_hash", "") for p in proof_dicts]
+    instance_root = hashlib.sha256("".join(hashes).encode()).hexdigest()
+
+    # Sign the instance root
+    signer  = get_signer()
+    sig_hex = signer.sign_hash(bytes.fromhex(instance_root))
+    pub_key = signer.get_public_key()
+
+    # package_hash — SHA-256 of full canonical ledger serialization
+    ledger_canonical = _json.dumps(proof_dicts, sort_keys=True,
+                                    separators=(",", ":"), ensure_ascii=False)
+    package_hash = hashlib.sha256(ledger_canonical.encode()).hexdigest()
+
+    # proof_fingerprint — SHA-256(instance_root + ":" + chain_length)
+    chain_length      = len(proof_dicts)
+    proof_fingerprint = hashlib.sha256(
+        f"{instance_root}:{chain_length}".encode()
+    ).hexdigest()
+
     package = {
-        "type":         "provable-ai-proof-package",
-        "instance_id":  args.instance,
-        "chain_length": len(proof_dicts),
-        "final_state":  proof_dicts[-1]["decision"]["to_state"] if proof_dicts else None,
-        "chain_root":   chain[-1].get("current_hash", "") if chain else "",
-        "proofs":       proof_dicts,
+        "valid":             True,
+        "type":              "provable-ai-proof-package",
+        "public_key":        pub_key,
+        "signature":         sig_hex,
+        "package_hash":      package_hash,
+        "proof_fingerprint": proof_fingerprint,
+        "chain_length":      chain_length,
+        "proof": {
+            "instance_id":   args.instance,
+            "instance_root": instance_root,
+            "ledger":        proof_dicts,
+        },
     }
 
     out_path = args.out or f"{args.instance}_proof.json"
@@ -152,7 +206,8 @@ def cmd_export(args: argparse.Namespace) -> int:
         _json.dump(package, f, indent=2)
 
     print(f"Proof package exported: {out_path}")
-    print(f"  proofs:  {len(proof_dicts)}")
+    print(f"  proofs:  {chain_length}")
+    print(f"  schema:  provable-ai-proof-package")
     return 0
 
 
