@@ -1,85 +1,53 @@
 {
+  "valid": true,
   "type": "provable-ai-proof-package",
-  "exported_at": "2026-05-13T09:00:00Z",
-  "instance_id": "loan-sample-9284",
-  "chain_length": 2,
-  "proof_fingerprint": "b7ee4d91b9fcde28a3c4f9e1d0b2a7c6e5f8d3a1b9c2e4f7d6a8b3c5e7f9d1a",
-  "public_key": "a428fc62d5c0b875e3f1d9a2c4b6e8f0d2a4c6e8b0d2f4a6c8e0b2d4f6a8c0e",
-  "signature": "9f3a1b5c7e2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a4c6e8b0d2f4a6c8e0b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a4c6e8b0d2f4",
-  "package_hash": "6358d2d4ee79b3c1a4f2e8d6b0a9c3e5f7d1b5a3c7e9f1d3b7a5c1e3f5d7b9",
+  "public_key": "3b44cbad1a742cca2e28b4ae9ef4d151e5374aa75689f7a1506a2442eed12b5e",
+  "signature": "20d81331dff53d4f621fdba0ea34c13085ad532017f3f0ecfab7fb6d997a7d1381cf06aed505641db260d4c78daf33ee0cc4e5ba9f7cce0a44b580443e21cd0d",
+  "package_hash": "475e7c3f7076570268f5107a21ba0800ab7732dfe718797322c527c31b7c347b",
+  "proof_fingerprint": "fea8858c0d9014e5b8a579959d78abd800ea35900b298ee8847b0671aded0920",
+  "chain_length": 1,
   "proof": {
-    "instance_id": "loan-sample-9284",
-    "instance_root": "eed1202fd77c54085e9e024ddacaa554b3c6d8f0a2e4c6b8d0f2a4c6e8b0d2f4",
+    "instance_id": "loan-9284",
+    "instance_root": "764fe8259f30aa71d20c078e90f3a00c6f73bd67962b7b073895dbb7be6db551",
     "ledger": [
       {
-        "ledger": {
-          "sequence_id": 1,
-          "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-          "current_hash": "7a3f1b9c5e2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a4c6e8b0d2f",
-          "timestamp": "2026-05-13T08:45:00Z",
-          "key_id": "env-a428fc62d5c0b875"
-        },
         "decision": {
-          "from_state": "received",
-          "to_state": "under_review"
-        },
-        "governance": {
-          "model_version": "credit-model-v3.1",
-          "agent_version": "underwriter-v1.0",
-          "policy_version": "credit-policy-v2",
-          "protocol_hash": "c3d5e7f9a1b3c5e7f9a1b3c5e7f9a1b3c5e7f9a1b3c5e7f9a1b3c5e7f9a1b3"
-        },
-        "decision_context": {
-          "reason_code": "INITIAL_REVIEW",
-          "policy_rule": "credit-policy-v2.rule_1",
-          "inputs_hash": "sha256:d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4",
-          "feature_contributions": [
-            {
-              "feature": "credit_score",
-              "contribution": "0.65"
-            },
-            {
-              "feature": "debt_to_income",
-              "contribution": "-0.12"
-            }
-          ],
-          "threshold_used": "700"
-        }
-      },
-      {
-        "ledger": {
-          "sequence_id": 2,
-          "previous_hash": "7a3f1b9c5e2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a4c6e8b0d2f",
-          "current_hash": "9c1e3a5b7d9f1b3c5e7a9c1e3a5b7d9f1b3c5e7a9c1e3a5b7d9f1b3c5e7a9c",
-          "timestamp": "2026-05-13T09:00:00Z",
-          "key_id": "env-a428fc62d5c0b875"
-        },
-        "decision": {
-          "from_state": "under_review",
+          "from_state": "submitted",
           "to_state": "approved"
         },
-        "governance": {
-          "model_version": "credit-model-v3.1",
-          "agent_version": "underwriter-v1.0",
-          "policy_version": "credit-policy-v2",
-          "protocol_hash": "c3d5e7f9a1b3c5e7f9a1b3c5e7f9a1b3c5e7f9a1b3c5e7f9a1b3c5e7f9a1b3"
-        },
         "decision_context": {
-          "reason_code": "SCORE_ABOVE_THRESHOLD",
-          "policy_rule": "credit-policy-v2.rule_7",
-          "inputs_hash": "sha256:d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4",
-          "feature_contributions": [
-            {
-              "feature": "credit_score",
-              "contribution": "0.65"
-            },
-            {
-              "feature": "debt_to_income",
-              "contribution": "-0.12"
-            }
-          ],
-          "threshold_used": "700"
-        }
+          "feature_contributions": [],
+          "inputs_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "metadata": {},
+          "model_version": "credit-model-v1",
+          "policy_rule": "credit-policy-v1.default",
+          "reason_code": "DECISION",
+          "threshold_used": null
+        },
+        "determinism": {
+          "external_calls_hash": null,
+          "mode": "strict_deterministic",
+          "seed": null
+        },
+        "governance": {
+          "agent_version": "underwriter-v1",
+          "model_version": "credit-model-v1",
+          "policy_version": "credit-policy-v1"
+        },
+        "instance_id": "loan-9284",
+        "ledger": {
+          "current_hash": "e78b944bebc683916b3a93ce1b396da20c7d49cf6f631c7e1cb1a3c66329bdc7",
+          "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "sequence_id": 1,
+          "timestamp": "2026-05-14T12:10:12Z"
+        },
+        "signature": {
+          "algorithm": "ed25519",
+          "key_id": "env-3b44cbad1a742cca",
+          "public_key": "3b44cbad1a742cca2e28b4ae9ef4d151e5374aa75689f7a1506a2442eed12b5e",
+          "value": "7e4ea71df0e5ea30549abc62b403200ee0aa35c5d6ae86b6caef5b859023e9dddef9b0582dbb24ea4de978501bd7de47ab90592f6646ca592332d530daa6d007"
+        },
+        "type": "zorynex-proof-v1"
       }
     ]
   }
