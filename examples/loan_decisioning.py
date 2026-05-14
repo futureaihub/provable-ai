@@ -294,7 +294,7 @@ def export_proof_package(proofs: list, output_path: str) -> None:
     proof_dicts = [p.model_dump(mode="json") for p in proofs]
 
     package = {
-        "type":         "zorynex-proof-package-v1",
+        "type":         "provable-ai-proof-package",
         "application":  LOAN_APPLICATION,
         "chain_length": len(proofs),
         "final_state":  proof_dicts[-1]["decision"]["to_state"],

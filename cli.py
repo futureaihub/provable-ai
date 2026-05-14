@@ -73,7 +73,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
         data = json.load(f)
 
     # Handle both single proof and proof package
-    if data.get("type") == "zorynex-proof-package-v1":
+    if data.get("type") == "provable-ai-proof-package":
         from provable_ai.verifier import verify_chain
         proofs = data.get("proofs", [])
         result = verify_chain(proofs)
@@ -139,7 +139,7 @@ def cmd_export(args: argparse.Namespace) -> int:
     ]
 
     package = {
-        "type":         "zorynex-proof-package-v1",
+        "type":         "provable-ai-proof-package",
         "instance_id":  args.instance,
         "chain_length": len(proof_dicts),
         "final_state":  proof_dicts[-1]["decision"]["to_state"] if proof_dicts else None,
