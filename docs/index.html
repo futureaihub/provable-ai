@@ -436,7 +436,7 @@
   <div id="jsonWrap">
   <div id="jsonCollapsed" style="display:none;background:var(--black-2);border:1.5px solid var(--black-4);border-radius:var(--radius);padding:.85rem 1.1rem;cursor:pointer;font-family:var(--mono);font-size:.78rem;color:var(--green);display:none;align-items:center;gap:.5rem" onclick="expandJson()">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-    View / Edit proof JSON &rarr;
+    View raw proof JSON &rarr;
   </div>
   <textarea id="jsonInput" placeholder='Paste exported proof package JSON here...&#10;{"type":"provable-ai-proof-package","proof":{...}}'></textarea>
 </div>
@@ -446,7 +446,7 @@
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
       Verify Package
     </button>
-    <button class="btn btn-ghost" onclick="loadTamperDemo()">See tampered proof fail</button>
+    <button class="btn btn-ghost" onclick="loadTamperDemo()">Try tamper detection</button>
     <button class="btn btn-ghost" id="clearBtn" style="display:none" onclick="clearAll()">Clear</button>
   </div>
 
@@ -569,7 +569,7 @@ async function verifyPackage(pkg) {
   else {
     const compRoot=await computeInstanceRoot(ledger);
     if (storedRoot&&compRoot!==storedRoot) { c4.failure=`Instance root mismatch.\nstored:   ${storedRoot.slice(0,32)}...\ncomputed: ${compRoot.slice(0,32)}...`; }
-    else { c4.passed=true; c4.detail=`Signed by env-${pubKey.slice(0,16)} — signature mathematically valid`; meta.key_id=`env-${pubKey.slice(0,16)}`; meta.public_key=pubKey; }
+    else { c4.passed=true; c4.detail=`Signed by Ed25519 key ${pubKey.slice(0,16)} — signature mathematically valid`; meta.key_id=pubKey.slice(0,16); meta.public_key=pubKey; }
   }
   checks.push(c4);
 
