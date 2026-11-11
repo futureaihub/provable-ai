@@ -35,7 +35,7 @@ Output:
   ✓  [PASS]  Chain valid
              Hash chain linkage verified across all decisions
 
-  ✓  [PASS]  Original signer verified
+  ✓  [PASS]  Signature valid against embedded key
              Ed25519 signature over instance root confirmed
 
 ────────────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ Output:
   Tamper status CLEAN
 ────────────────────────────────────────────────────────────────
 
-  FINAL VERDICT:  ✓  VALID EVIDENCE
+  FINAL VERDICT:  ✓  INTEGRITY VERIFIED (SIGNER IDENTITY UNVERIFIED)
 ```
 
 No Zorynex account. No API key. No network connection at verification time. The proof either verifies cryptographically or it does not — there is no middle ground.

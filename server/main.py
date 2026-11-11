@@ -1417,7 +1417,7 @@ async def verify_package_endpoint(
     1. **Package structure** — type valid, ledger non-empty
     2. **Package untampered** — SHA-256 of full ledger matches `package_hash`
     3. **Chain valid** — per-proof canonical hash recomputed + linkage verified
-    4. **Original signer verified** — Ed25519 over instance root verified
+    4. **Signature valid against embedded key** — Ed25519 over instance root verified
 
     Returns `verified: true/false` + per-check detail.
     HTTP 200 = all checks pass. HTTP 422 = one or more failed.
@@ -1567,7 +1567,7 @@ async def verify_package_endpoint(
     stored_root  = package.get("proof", {}).get("instance_root", "")
 
     if not public_key or not sig_hex:
-        checks.append({"name": "Original signer verified", "passed": False,
+        checks.append({"name": "Signature valid against embedded key", "passed": False,
                         "failure": "Missing public_key or signature in package."})
         all_passed = False
     else:
@@ -1575,7 +1575,7 @@ async def verify_package_endpoint(
         computed_root = _hashlib.sha256(all_hashes.encode()).hexdigest()
 
         if stored_root and computed_root != stored_root:
-            checks.append({"name": "Original signer verified", "passed": False,
+            checks.append({"name": "Signature valid against embedded key", "passed": False,
                             "failure": f"Instance root mismatch — contents modified after signing. "
                                        f"stored={stored_root[:16]}... "
                                        f"computed={computed_root[:16]}..."})
@@ -1586,11 +1586,11 @@ async def verify_package_endpoint(
                 vk = VerifyKey(bytes.fromhex(public_key))
                 vk.verify(bytes.fromhex(computed_root), bytes.fromhex(sig_hex))
                 key_id = f"env-{public_key[:16]}"
-                checks.append({"name": "Original signer verified", "passed": True,
+                checks.append({"name": "Signature valid against embedded key", "passed": True,
                                 "detail": f"Signed by {key_id} — signature mathematically valid"})
                 meta["key_id"] = key_id
             except Exception as e:
-                checks.append({"name": "Original signer verified", "passed": False,
+                checks.append({"name": "Signature valid against embedded key", "passed": False,
                                 "failure": f"Ed25519 signature invalid — package may have been re-signed or signature corrupted: {e}"})
                 all_passed = False
 
@@ -1608,7 +1608,7 @@ async def verify_package_endpoint(
     # ── Build human-readable failure reason ────────────────────────────────
     failure_reason = None
     if not all_passed:
-        sig_passed    = any(c["name"] == "Original signer verified" and c["passed"]     for c in checks)
+        sig_passed    = any(c["name"] == "Signature valid against embedded key" and c["passed"]     for c in checks)
         tamper_failed = any(c["name"] == "Package untampered"          and not c["passed"] for c in checks)
         chain_failed  = any(c["name"] == "Chain valid"                 and not c["passed"] for c in checks)
         struct_failed = any(c["name"] == "Package structure valid"     and not c["passed"] for c in checks)

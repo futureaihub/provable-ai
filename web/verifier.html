@@ -556,7 +556,7 @@ async function verifyPackage(pkg) {
   }
   checks.push(c3);
 
-  const c4={name:'Original signer verified', passed:false, detail:'', failure:''};
+  const c4={name:'Signature valid against embedded key', passed:false, detail:'', failure:''};
   const pubKey=pkg.public_key||'', sigHex=pkg.signature||'', storedRoot=(pkg.proof||{}).instance_root||'';
   if (!pubKey||!sigHex) { c4.failure='Missing public_key or signature.'; }
   else {
@@ -600,7 +600,7 @@ function renderResult(result, pkg) {
   const reasonEl = document.getElementById('failureReason');
   if (reasonEl) {
     if (!passed) {
-      const sigPassed    = checks.some(c => c.name === 'Original signer verified' && c.passed);
+      const sigPassed    = checks.some(c => c.name === 'Signature valid against embedded key' && c.passed);
       const tamperFailed = checks.some(c => c.name === 'Package untampered'       && !c.passed);
       const chainFailed  = checks.some(c => c.name === 'Chain valid'              && !c.passed);
       const structFailed = checks.some(c => c.name === 'Package structure valid'  && !c.passed);
@@ -877,7 +877,7 @@ function downloadReport() {
     // FAILURE WARNING — only on failed, large red callout
     // ════════════════════════════════════════════════════════════════════════
     if (!passed) {
-      const sigPassed    = checks.some(c=>c.name==='Original signer verified' && c.passed);
+      const sigPassed    = checks.some(c=>c.name==='Signature valid against embedded key' && c.passed);
       const tamperFailed = checks.some(c=>c.name==='Package untampered'       && !c.passed);
       const chainFailed  = checks.some(c=>c.name==='Chain valid'              && !c.passed);
       const structFailed = checks.some(c=>c.name==='Package structure valid'  && !c.passed);

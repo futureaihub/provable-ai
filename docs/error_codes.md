@@ -316,7 +316,7 @@ POST /governance/policy  {"name": "...", "version": "..."}
     {"name": "Package structure valid",  "passed": true},
     {"name": "Package untampered",       "passed": false, "failure": "Hash mismatch..."},
     {"name": "Chain valid",              "passed": false},
-    {"name": "Original signer verified", "passed": true}
+    {"name": "Signature valid against embedded key", "passed": true}
   ]
 }
 ```
@@ -330,9 +330,9 @@ POST /governance/policy  {"name": "...", "version": "..."}
 | Package structure valid | File is a valid `provable-ai-proof-package` with non-empty ledger |
 | Package untampered | SHA-256 of ledger matches `package_hash` |
 | Chain valid | Every `previous_hash` links correctly to the preceding entry's `current_hash` |
-| Original signer verified | Ed25519 signature over `instance_root` verifies against embedded `public_key` |
+| Signature valid against embedded key | Ed25519 signature over `instance_root` verifies against embedded `public_key` |
 
-**Important:** "Original signer verified" can pass even when other checks fail. This means the proof was signed correctly but modified afterward — the signer is confirmed, but the content is not trusted.
+**Important:** "Signature valid against embedded key" can pass even when other checks fail. This means the proof was signed correctly but modified afterward — the signer is confirmed, but the content is not trusted.
 
 **Remediation:** Do not use this artifact as evidence. Request a fresh export from the original system.
 

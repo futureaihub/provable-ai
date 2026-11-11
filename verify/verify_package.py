@@ -14,7 +14,7 @@ Output (default):
     ✓ Package structure valid
     ✓ Package untampered  (hash matches)
     ✓ Chain valid         (3 proofs, sequence 1→3)
-    ✓ Original signer verified  (env-58c9d4aa... — signature mathematically valid)
+    ✓ Signature valid against embedded key  (env-58c9d4aa... — signature mathematically valid)
 
     RESULT: VERIFIED ✓
     Instance: loan-application-9284
@@ -227,7 +227,7 @@ def verify_package(package: dict) -> tuple[bool, list[CheckResult], dict]:
     checks.append(c3)
 
     # ── Check 4: Ed25519 signature ────────────────────────────────────────────
-    c4 = CheckResult("Original signer verified")
+    c4 = CheckResult("Signature valid against embedded key")
     public_key  = package.get("public_key", "")
     sig_hex     = package.get("signature",  "")
     stored_root = proof_block.get("instance_root", "")
@@ -309,9 +309,9 @@ def _print_human(
     # VERDICT
     # ─────────────────────────────────────────────────────────────────────────
     if all_passed:
-        verdict_line = f"  ✓  VERDICT: PROOF IS VALID EVIDENCE"
+        verdict_line = f"  ✓  VERDICT: PACKAGE IS INTERNALLY CONSISTENT (signer identity unverified)"
         print(verdict_line)
-        print(f"  {'All cryptographic checks passed. This artifact is trustworthy.':<{W+2}}")
+        print(f"  {'All integrity checks passed. The package is unaltered since signing; who signed it is not established here.':<{W+2}}")
     else:
         verdict_line = f"  ✗  VERDICT: PROOF FAILED VERIFICATION"
         print(verdict_line)
@@ -329,7 +329,7 @@ def _print_human(
         "Package structure valid":  "Proof package schema and required fields",
         "Package untampered":       "SHA-256 of ledger matches stored package hash",
         "Chain valid":              "Hash chain linkage verified across all decisions",
-        "Original signer verified": "Ed25519 signature over instance root",
+        "Signature valid against embedded key": "Ed25519 signature over instance root",
     }
     for c in checks:
         skipped = getattr(c, 'skipped', False)
@@ -349,7 +349,7 @@ def _print_human(
     # FAILURE REASON (if failed)
     # ─────────────────────────────────────────────────────────────────────────
     if not all_passed:
-        sig_passed    = any(c.name == "Original signer verified" and c.passed for c in checks)
+        sig_passed    = any(c.name == "Signature valid against embedded key" and c.passed for c in checks)
         tamper_failed = any(c.name == "Package untampered"       and not c.passed for c in checks)
         chain_failed  = any(c.name == "Chain valid"              and not c.passed for c in checks)
         struct_failed = any(c.name == "Package structure valid"  and not c.passed for c in checks)
@@ -364,7 +364,7 @@ def _print_human(
         elif tamper_failed and sig_passed:
             print("  TAMPER DETECTED — SIGNED BY A VALID KEY, THEN MODIFIED")
             print()
-            print("  The original signer is confirmed. The signing key is valid.")
+            print("  The signature is valid against the key embedded in the package. Confirm its fingerprint out of band.")
             print("  However, the proof contents were altered after signing.")
             print("  This indicates the file was modified after it left the source system.")
             print()
@@ -373,7 +373,7 @@ def _print_human(
         elif chain_failed and sig_passed:
             print("  CHAIN INTEGRITY FAILURE — SIGNED BY A VALID KEY, CHAIN ALTERED")
             print()
-            print("  The original signer is confirmed.")
+            print("  The signature is valid against the embedded key; signer identity is unverified.")
             print("  The decision chain has been altered — a record was inserted,")
             print("  deleted, or reordered after the package was created.")
             print()
@@ -476,9 +476,9 @@ def _print_human(
     # ─────────────────────────────────────────────────────────────────────────
     print(heavy())
     if all_passed:
-        print(f"  {'✓  VERIFICATION COMPLETE — VALID EVIDENCE':^{W}}")
-        print(f"  {'This proof artifact is cryptographically sound.':^{W}}")
-        print(f"  {'It may be presented to auditors and regulators.':^{W}}")
+        print(f"  {'✓  INTEGRITY VERIFIED — SIGNER IDENTITY UNVERIFIED':^{W}}")
+        print(f"  {'The package is unaltered and internally consistent.':^{W}}")
+        print(f"  {'Confirm the signer's key fingerprint out of band.':^{W}}")
     else:
         print(f"  {'✗  VERIFICATION FAILED — DO NOT USE AS EVIDENCE':^{W}}")
         print(f"  {'This artifact failed cryptographic verification.':^{W}}")

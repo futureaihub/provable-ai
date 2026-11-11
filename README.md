@@ -3,11 +3,11 @@
 [![License](https://img.shields.io/badge/license-Zorynex%20Source--Available-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
 [![Tests](https://img.shields.io/badge/tests-576%20passing-brightgreen)](tests/)
-[![Status](https://img.shields.io/badge/status-production--ready-green)]()
+[![Status](https://img.shields.io/badge/status-pilot--ready-blue)]()
 
 Every AI decision becomes a cryptographic proof artifact — tamper-evident, hash-chained, independently verifiable with zero server access.
 
-**The core property:** An auditor receives a file. They verify it on their own machine. No call to your API. No database access. No trust in your organisation required. The mathematics proves it.
+**The core property:** An auditor receives a file and verifies it on their own machine - no call to your API, no database access. Verification proves the package is internally consistent and unaltered since signing. It does **not**, on its own, prove who signed it: the signing key travels inside the package, so a forged package can be re-signed with an attacker's own key. Signer identity must be confirmed out of band against a published key fingerprint.
 
 ---
 

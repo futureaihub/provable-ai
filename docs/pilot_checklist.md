@@ -84,7 +84,7 @@ Full env var reference: docs/integration.md → Configuration section
 
 ☐ CLI verification passes:
    python verify/verify_package.py pilot_test.json
-   → FINAL VERDICT: VALID EVIDENCE
+   → FINAL VERDICT: INTEGRITY VERIFIED (SIGNER IDENTITY UNVERIFIED)
 
 ☐ Browser verification works:
    Open http://localhost:8000/verify-ui
@@ -151,7 +151,7 @@ Full env var reference: docs/integration.md → Configuration section
 ☐ docs/auditor.md shared with compliance team
 ☐ Compliance team has verified at least one proof independently:
    python verify/verify_package.py <proof.json>
-   → FINAL VERDICT: VALID EVIDENCE
+   → FINAL VERDICT: INTEGRITY VERIFIED (SIGNER IDENTITY UNVERIFIED)
 ☐ Compliance team knows to call GET /audit/compliance for regulatory pack
 ```
 
